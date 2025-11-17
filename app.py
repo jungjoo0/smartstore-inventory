@@ -230,6 +230,20 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/api/server-ip')
+def get_server_ip():
+    """현재 서버의 외부 IP 주소 조회"""
+    try:
+        response = requests.get('https://api.ipify.org?format=json', timeout=5)
+        ip_data = response.json()
+        return jsonify({
+            'server_ip': ip_data.get('ip'),
+            'message': '이 IP를 네이버 커머스 API 설정에 추가하세요'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/products')
 def api_products():
     """상품 목록 API"""
