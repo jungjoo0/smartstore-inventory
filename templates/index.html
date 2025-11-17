@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네이버 스마트스토어 재고 관리</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .loading.active {
+            display: flex;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .product-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+        }
+        
+        .product-header {
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .product-name {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        
+        .product-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+        
+        .badge-sale {
+            background: #10b981;
+            color: white;
+        }
+        
+        .price {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .total-stock {
+            background: #f3f4f6;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .total-stock-label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .total-stock-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .options-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+        
+        .option-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .option-name {
+            flex: 1;
+            color: #555;
+            font-size: 0.9rem;
+        }
+        
+        .option-stock {
+            font-weight: bold;
+            color: #667eea;
+            margin-left: 10px;
+        }
+        
+        .option-stock.low {
+            color: #ef4444;
+        }
+        
+        .option-stock.zero {
+            color: #dc2626;
+        }
+        
+        .no-options {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            padding: 20px;
+        }
+        
+        .error {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛒 네이버 스마트스토어 재고 관리</h1>
+            <p class="subtitle">실시간 상품 및 옵션별 재고 현황</p>
+        </header>
+        
+        <div class="controls">
+            <button class="btn" onclick="loadProducts()">🔄 재고 새로고침</button>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <span>상품 정보를 불러오는 중...</span>
+            </div>
+        </div>
+        
+        <div class="stats" id="stats" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-value" id="totalProducts">0</div>
+                <div class="stat-label">전체 상품 수</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalStock">0</div>
+                <div class="stat-label">총 재고 수량</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="lowStockCount">0</div>
+                <div class="stat-label">재고 부족 (10개 미만)</div>
+            </div>
+        </div>
+        
+        <div class="products-grid" id="productsGrid"></div>
+    </div>
+    
+    <script>
+        async function loadProducts() {
+            const loadingEl = document.getElementById('loading');
+            const gridEl = document.getElementById('productsGrid');
+            const statsEl = document.getElementById('stats');
+            
+            loadingEl.classList.add('active');
+            gridEl.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/products');
+                const data = await response.json();
+                
+                if (data.error) {
+                    gridEl.innerHTML = `<div class="error">${data.error}</div>`;
+                    return;
+                }
+                
+                const products = data.products;
+                
+                // 통계 계산
+                let totalStock = 0;
+                let lowStockCount = 0;
+                
+                products.forEach(product => {
+                    totalStock += product.total_stock;
+                    
+                    if (product.options && product.options.length > 0) {
+                        product.options.forEach(opt => {
+                            if (opt.stock < 10 && opt.stock > 0) {
+                                lowStockCount++;
+                            }
+                        });
+                    }
+                });
+                
+                // 통계 표시
+                document.getElementById('totalProducts').textContent = products.length;
+                document.getElementById('totalStock').textContent = totalStock.toLocaleString();
+                document.getElementById('lowStockCount').textContent = lowStockCount;
+                statsEl.style.display = 'grid';
+                
+                // 상품 카드 생성
+                products.forEach(product => {
+                    const card = createProductCard(product);
+                    gridEl.appendChild(card);
+                });
+                
+            } catch (error) {
+                gridEl.innerHTML = `<div class="error">오류가 발생했습니다: ${error.message}</div>`;
+            } finally {
+                loadingEl.classList.remove('active');
+            }
+        }
+        
+        function createProductCard(product) {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+            
+            let optionsHtml = '';
+            
+            if (product.options && product.options.length > 0) {
+                optionsHtml = '<div class="options-title">📦 옵션별 재고</div>';
+                product.options.forEach(option => {
+                    let stockClass = '';
+                    if (option.stock === 0) stockClass = 'zero';
+                    else if (option.stock < 10) stockClass = 'low';
+                    
+                    optionsHtml += `
+                        <div class="option-item">
+                            <span class="option-name">${option.name}</span>
+                            <span class="option-stock ${stockClass}">${option.stock.toLocaleString()}개</span>
+                        </div>
+                    `;
+                });
+            } else {
+                optionsHtml = '<div class="no-options">옵션 정보 없음</div>';
+            }
+            
+            card.innerHTML = `
+                <div class="product-header">
+                    <div class="product-name">${product.name}</div>
+                    <div class="product-info">
+                        <span class="badge badge-sale">${product.status}</span>
+                        <span class="price">${product.price.toLocaleString()}원</span>
+                    </div>
+                </div>
+                
+                <div class="total-stock">
+                    <div class="total-stock-label">전체 재고</div>
+                    <div class="total-stock-value">${product.total_stock.toLocaleString()}개</div>
+                </div>
+                
+                ${optionsHtml}
+            `;
+            
+            return card;
+        }
+        
+        // 페이지 로드 시 자동 실행
+        window.addEventListener('load', loadProducts);
+    </script>
+</body>
+</html>
