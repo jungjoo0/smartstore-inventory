@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>네이버 스마트스토어 재고 관리</title>
+    <title>페이블리 재고 관리</title>
     <style>
         * {
             margin: 0;
@@ -263,30 +263,15 @@
 <body>
     <div class="container">
         <header>
-            <h1>🛒 네이버 스마트스토어 재고 관리</h1>
+            <h1>페이블리 재고 관리</h1>
             <p class="subtitle">실시간 상품 및 옵션별 재고 현황</p>
         </header>
         
         <div class="controls">
-            <button class="btn" onclick="loadProducts()">🔄 재고 새로고침</button>
+            <button class="btn" onclick="loadProducts()">🔄새로고침</button>
             <div class="loading" id="loading">
                 <div class="spinner"></div>
                 <span>상품 정보를 불러오는 중...</span>
-            </div>
-        </div>
-        
-        <div class="stats" id="stats" style="display: none;">
-            <div class="stat-card">
-                <div class="stat-value" id="totalProducts">0</div>
-                <div class="stat-label">전체 상품 수</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="totalStock">0</div>
-                <div class="stat-label">총 재고 수량</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="lowStockCount">0</div>
-                <div class="stat-label">재고 부족 (10개 미만)</div>
             </div>
         </div>
         
@@ -297,7 +282,6 @@
         async function loadProducts() {
             const loadingEl = document.getElementById('loading');
             const gridEl = document.getElementById('productsGrid');
-            const statsEl = document.getElementById('stats');
             
             loadingEl.classList.add('active');
             gridEl.innerHTML = '';
@@ -313,27 +297,15 @@
                 
                 const products = data.products;
                 
-                // 통계 계산
-                let totalStock = 0;
-                let lowStockCount = 0;
-                
-                products.forEach(product => {
-                    totalStock += product.total_stock;
+                // 상품 정렬: "풍선" 포함된 상품은 아래로
+                products.sort((a, b) => {
+                    const aHasBalloon = a.name.includes('풍선');
+                    const bHasBalloon = b.name.includes('풍선');
                     
-                    if (product.options && product.options.length > 0) {
-                        product.options.forEach(opt => {
-                            if (opt.stock < 10 && opt.stock > 0) {
-                                lowStockCount++;
-                            }
-                        });
-                    }
+                    if (aHasBalloon && !bHasBalloon) return 1;
+                    if (!aHasBalloon && bHasBalloon) return -1;
+                    return 0;
                 });
-                
-                // 통계 표시
-                document.getElementById('totalProducts').textContent = products.length;
-                document.getElementById('totalStock').textContent = totalStock.toLocaleString();
-                document.getElementById('lowStockCount').textContent = lowStockCount;
-                statsEl.style.display = 'grid';
                 
                 // 상품 카드 생성
                 products.forEach(product => {
