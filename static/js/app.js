@@ -46,19 +46,25 @@ function createProductCard(product) {
     let optionsHtml = '';
     
     if (product.options && product.options.length > 0) {
-        optionsHtml = '<div class="options-title">📦 옵션별 재고</div>';
+        let optionsItemsHtml = '';
         product.options.forEach(option => {
             let stockClass = '';
             if (option.stock === 0) stockClass = 'zero';
             else if (option.stock < 10) stockClass = 'low';
             
-            optionsHtml += `
-                <div class="option-item">
+            optionsItemsHtml += `
+                <div class="option-item ${stockClass}">
                     <span class="option-name">${option.name}</span>
-                    <span class="option-stock ${stockClass}">${option.stock.toLocaleString()}개</span>
+                    <span class="option-stock">${option.stock.toLocaleString()}개</span>
                 </div>
             `;
         });
+        optionsHtml = `
+            <div class="options-title">📦 옵션별 재고</div>
+            <div class="option-list">
+                ${optionsItemsHtml}
+            </div>
+        `;
     } else {
         optionsHtml = '<div class="no-options">옵션 정보 없음</div>';
     }
