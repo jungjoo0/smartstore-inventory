@@ -224,7 +224,7 @@ h1 {
 }
 
 .option-item.low {
-    border-left-color: var(--warning-color);
+    border-left-color: var(--success-color);
 }
 
 .option-item.zero {
