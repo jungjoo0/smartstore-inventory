@@ -246,18 +246,11 @@ h1 {
 }
 
 .option-item.low .option-stock {
-    color: var(--warning-color);
+    color: var(--success-color);
 }
-.option-item.low .option-stock::before {
-    content: '⚠️ ';
-}
-
 
 .option-item.zero .option-stock {
     color: var(--danger-color);
-}
-.option-item.zero .option-stock::before {
-    content: '❌ ';
 }
 
 .no-options {
