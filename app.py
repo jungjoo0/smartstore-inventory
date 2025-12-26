@@ -484,8 +484,13 @@ def api_orders():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     
-    orders = get_order_list(access_token, start_date, end_date)
-    return jsonify({'orders': orders})
+    try:
+        orders = get_order_list(access_token, start_date, end_date)
+        return jsonify({'orders': orders})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 # 메인 실행 블록
