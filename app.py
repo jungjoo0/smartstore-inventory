@@ -297,14 +297,25 @@ def get_order_list(access_token):
         for order in product_orders:
             shipping_address = order.get('shippingAddress', {})
             product_order = order.get('productOrder', {})
+            order_detail = order.get('order', {})
+            
+            # 구매자명: 배송지 수령인 우선, 없으면 주문자명
+            buyer_name = shipping_address.get('name')
+            if not buyer_name:
+                buyer_name = order_detail.get('orderer', {}).get('name', 'N/A')
+            
+            # 주문일시
+            order_date = product_order.get('orderDate')
+            if not order_date:
+                order_date = order_detail.get('orderDate', 'N/A')
             
             order_info = {
-                'order_date':  product_order.get('orderDate', 'N/A'),
+                'order_date':  order_date,
                 'product_order_id': product_order.get('productOrderId'),
                 'product_name': product_order.get('productName'),
                 'product_option': product_order.get('productOption'),
                 'quantity': product_order.get('quantity'),
-                'buyer_name': shipping_address.get('name', 'N/A'),
+                'buyer_name': buyer_name,
                 'status': product_order.get('productOrderStatus'),
             }
             orders_info.append(order_info)

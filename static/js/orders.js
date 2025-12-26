@@ -54,20 +54,41 @@ function renderOrders(orders) {
 
     orders.forEach(order => {
         // 날짜 포맷팅
-        const date = new Date(order.order_date).toLocaleString('ko-KR', {
-            month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
+        let dateStr = '-';
+        if (order.order_date && order.order_date !== 'N/A') {
+            try {
+                dateStr = new Date(order.order_date).toLocaleString('ko-KR', {
+                    month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+            } catch (e) {
+                dateStr = order.order_date;
+            }
+        }
+
+        // 상태 한글 변환
+        const statusMap = {
+            'PAYED': '결제완료',
+            'DISPATCHED': '발송중',
+            'DELIVERING': '배송중',
+            'DELIVERED': '배송완료',
+            'PURCHASE_DECIDED': '구매확정',
+            'EXCHANGED': '교환',
+            'CANCELED': '취소',
+            'RETURNED': '반품',
+            'REFUNDED': '환불'
+        };
+        const statusText = statusMap[order.status] || order.status;
 
         // 상태에 따른 클래스
         let statusClass = 'status-default';
         if (order.status === 'PAYED') statusClass = 'status-payed';
-        else if (order.status === 'DISPATCHED') statusClass = 'status-dispatched';
-        else if (order.status === 'CANCELED') statusClass = 'status-canceled';
+        else if (order.status === 'DISPATCHED' || order.status === 'DELIVERING') statusClass = 'status-dispatched';
+        else if (order.status === 'CANCELED' || order.status === 'RETURNED') statusClass = 'status-canceled';
 
         html += `
             <tr>
-                <td class="order-date">${date}</td>
-                <td><span class="status-badge ${statusClass}">${order.status}</span></td>
+                <td class="order-date">${dateStr}</td>
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td class="product-info-cell">
                     <div class="order-product-name">${order.product_name}</div>
                     <div class="order-option">${order.product_option || '-'}</div>
