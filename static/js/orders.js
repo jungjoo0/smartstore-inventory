@@ -11,7 +11,7 @@ async function loadOrders() {
     // 로딩 상태 표시
     loading.classList.add('active');
     if (btn) btn.disabled = true;
-    orderList.innerHTML = '<div class="no-data">주문 정보를 불러오는 중입니다...</div>';
+    orderList.innerHTML = '';
 
     try {
         const response = await fetch('/api/orders');
