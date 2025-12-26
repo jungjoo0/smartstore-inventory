@@ -244,153 +244,97 @@ def get_product_list(access_token):
         return []
 
 
-# 주문 내역을 조회하는 함수입니다. (start_date, end_date는 'YYYY-MM-DD' 형식의 문자열)
-def get_order_list(access_token, start_date_str=None, end_date_str=None):
+# 주문 내역을 조회하는 함수입니다. (최근 24시간 변동 내역)
+def get_order_list(access_token):
     if not access_token:
         return []
 
-    # 조건별 상품 주문 조회 API URL
-    url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders"
+    # 최근 변경 주문 조회 API URL
+    url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/last-changed-statuses"
     
     headers = {
         'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json'
     }
     
+    # 현재 시간에서 24시간 전 (ISO 8601 형식)
     import datetime
-    import concurrent.futures
-    import math
+    last_changed_from = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
     
-    # Timezone: KST (UTC+9)
-    KST = datetime.timezone(datetime.timedelta(hours=9))
-    now = datetime.datetime.now(KST)
-    
-    # 날짜 파싱 및 범위 계산
-    if start_date_str and end_date_str:
-        try:
-            # 입력받은 날짜 문자열을 KST 날짜 객체로 변환 (시간은 00:00:00 기준)
-            s_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d').replace(tzinfo=KST)
-            e_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d').replace(tzinfo=KST)
-            
-            # 종료일은 해당 일의 23:59:59까지 포함하도록 설정하는 것이 일반적이나,
-            # 여기서는 로직 단순화를 위해 날짜 차이(days) 계산에 집중
-            
-            # e_date가 s_date보다 과거면 교체
-            if s_date > e_date:
-                s_date, e_date = e_date, s_date
-                
-            # 일수 차이 계산 (+1 해야 당일 포함)
-            delta = (e_date - s_date).days + 1
-            days_to_fetch = delta
-            target_end_date = e_date # 루프 시작 기준점
-            
-        except ValueError:
-            # 파싱 실패 시 기본값 (최근 3일)
-            days_to_fetch = 3
-            target_end_date = now
-    else:
-        # 기본값: 최근 3일
-        days_to_fetch = 3
-        target_end_date = now
+    # 쿼리 파라미터
+    params = {
+        'lastChangedFrom': last_changed_from
+    }
 
-    # 안전 장치: 최대 90일까지만 허용 (서버 부하 방지)
-    if days_to_fetch > 90:
-        days_to_fetch = 90
-
-    all_product_orders = []
-    
-    # 날짜별 조회 함수 (병렬 실행용)
-    def fetch_orders_by_date(day_offset):
-        # target_end_date 기준 day_offset만큼 전의 날짜
-        # 예: offset=0 -> target_end_date 당일
-        base_date = target_end_date - datetime.timedelta(days=day_offset)
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
         
-        # 검색 기간: 해당 날짜의 00:00:00 ~ 23:59:59 (+09:00)
-        # Naver API는 from~to 간격이 24시간 이내여야 함.
+        data = response.json()
+        last_change_statuses = data.get('data', {}).get('lastChangeStatuses', [])
         
-        # 시작: 해당일 00:00:00
-        start_dt = base_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        # 종료: 해당일 23:59:59 (또는 다음날 00:00:00 직전)
-        end_dt = base_date.replace(hour=23, minute=59, second=59, microsecond=999000)
+        # 상품 주문 번호 리스트 추출
+        product_order_ids = [item['productOrderId'] for item in last_change_statuses]
         
-        # 만약 미래 날짜라면 조회 불필요 (오늘까지만)
-        if start_dt > now:
+        if not product_order_ids:
             return []
-            
-        to_date_str = end_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
-        from_date_str = start_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
+
+        # 상품 주문 상세 조회 (최대 300개 제한이 있으므로, 필요시 루프 처리 필요하나 여기선 단순화)
+        # API: POST /external/v1/pay-order/seller/product-orders/query
+        query_url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/query"
         
-        params = {
-            'rangeType': 'PAYED_DATETIME',
-            'from': from_date_str,
-            'to': to_date_str
+        payload = {
+            "productOrderIds": product_order_ids
         }
         
-        try:
-            resp = requests.get(url, headers=headers, params=params, timeout=10) # 타임아웃 10초로 조금 여유 둠
-            if resp.status_code == 200:
-                return resp.json().get('data', [])
-            return []
-        except Exception:
-            return []
-
-    # ThreadPoolExecutor를 사용하여 병렬 요청 (최대 10개 스레드)
-    # 요청 수가 적으면 스레드 수도 조절
-    max_workers = min(10, days_to_fetch) if days_to_fetch > 0 else 1
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_offset = {executor.submit(fetch_orders_by_date, i): i for i in range(days_to_fetch)}
+        query_response = requests.post(query_url, headers=headers, json=payload)
+        query_response.raise_for_status()
         
-        for future in concurrent.futures.as_completed(future_to_offset):
-            try:
-                orders = future.result()
-                if orders:
-                    all_product_orders.extend(orders)
-            except Exception:
+        query_data = query_response.json()
+        product_orders = query_data.get('data', [])
+        
+        orders_info = []
+        for item in product_orders:
+            product_order = item.get('productOrder', {})
+            order_detail = item.get('order', {})
+            
+            # 필터링: 구매확정(PURCHASE_DECIDED) 제외 (사용자 요청 반영 유지)
+            status = product_order.get('productOrderStatus')
+            if status == 'PURCHASE_DECIDED':
                 continue
 
-    # 데이터 가공 및 중복 제거
-    orders_info = []
-    processed_ids = set()
-    
-    for item in all_product_orders:
-        product_order = item.get('productOrder', {})
-        p_id = product_order.get('productOrderId')
-        
-        if not p_id or p_id in processed_ids:
-            continue
-        processed_ids.add(p_id)
-        
-        # 필터링: 구매확정(PURCHASE_DECIDED) 제외
-        status = product_order.get('productOrderStatus')
-        if status == 'PURCHASE_DECIDED':
-            continue
+            shipping_address = product_order.get('shippingAddress', {})
             
-        order_detail = item.get('order', {})
-        shipping_address = product_order.get('shippingAddress', {})
-        
-        buyer_name = shipping_address.get('name')
-        if not buyer_name:
-            buyer_name = order_detail.get('ordererName', 'N/A')
-        
-        order_date = order_detail.get('orderDate')
-        if not order_date:
-            order_date = product_order.get('placeOrderDate')
-        
-        order_info = {
-            'order_date':  order_date if order_date else 'N/A',
-            'product_order_id': p_id,
-            'order_id': order_detail.get('orderId', 'N/A'),
-            'product_name': product_order.get('productName'),
-            'product_option': product_order.get('productOption'),
-            'quantity': product_order.get('quantity'),
-            'buyer_name': buyer_name,
-            'status': status,
-        }
-        orders_info.append(order_info)
-        
-    orders_info.sort(key=lambda x: x['order_date'], reverse=True)
-    return orders_info
+            # 구매자명: 배송지 수령인(name) 우선, 없으면 주문자명(ordererName)
+            buyer_name = shipping_address.get('name')
+            if not buyer_name:
+                buyer_name = order_detail.get('ordererName', 'N/A')
+            
+            # 주문일시
+            order_date = order_detail.get('orderDate')
+            if not order_date:
+                order_date = product_order.get('placeOrderDate')
+            
+            order_info = {
+                'order_date':  order_date if order_date else 'N/A',
+                'product_order_id': product_order.get('productOrderId'),
+                'order_id': order_detail.get('orderId', 'N/A'),
+                'product_name': product_order.get('productName'),
+                'product_option': product_order.get('productOption'),
+                'quantity': product_order.get('quantity'),
+                'buyer_name': buyer_name,
+                'status': status,
+            }
+            orders_info.append(order_info)
+            
+        # 최신순 정렬
+        orders_info.sort(key=lambda x: x['order_date'], reverse=True)
+        return orders_info
+
+    except Exception as e:
+        print(f"주문 조회 오류: {e}")
+        return []
+
 
 
 
@@ -480,17 +424,8 @@ def api_orders():
     if not access_token:
         return jsonify({'error': '토큰 발급 실패'}), 500
     
-    # 쿼리 파라미터 받기
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    
-    try:
-        orders = get_order_list(access_token, start_date, end_date)
-        return jsonify({'orders': orders})
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+    orders = get_order_list(access_token)
+    return jsonify({'orders': orders})
 
 
 # 메인 실행 블록
