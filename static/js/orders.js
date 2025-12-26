@@ -9,44 +9,74 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadOrders(isSync = false) {
     const loading = document.getElementById('loading');
     const orderList = document.getElementById('orderList');
-    // 버튼 Selector 수정
     const btn = document.querySelector('.btn-search') || document.querySelector('.btn');
     const syncBtn = document.getElementById('syncBtn');
     const lastSynced = document.getElementById('lastSynced');
 
-    // 로딩 상태 표시
     loading.classList.add('active');
     if (btn) btn.disabled = true;
     if (syncBtn) syncBtn.disabled = true;
 
     if (isSync) {
-        // 동기화 시 안내 메시지
-        orderList.innerHTML = '<div class="no-data">네이버와 동기화 중입니다...<br>(최근 3개월 조회로 인해 최대 1~2분 소요될 수 있습니다)</div>';
+        orderList.innerHTML = '<div class="no-data" id="syncProgress">네이버와 동기화 중입니다...<br>진행률: 0%</div>';
     } else {
         orderList.innerHTML = '';
     }
 
     try {
-        const url = isSync ? '/api/orders?sync=true' : '/api/orders';
-        const response = await fetch(url);
-        const data = await response.json();
+        if (isSync) {
+            // 90일치를 5일 단위로 끊어서 요청 (총 18회)
+            const totalDays = 90;
+            const chunkSize = 5;
+            const iterations = Math.ceil(totalDays / chunkSize);
 
-        if (response.ok) {
-            renderOrders(data.orders);
-            if (data.message && lastSynced) {
-                lastSynced.textContent = data.message;
-                // 5초 후 메시지 사라짐
+            for (let i = 0; i < iterations; i++) {
+                const offset = i * chunkSize;
+                const progress = Math.round((i / iterations) * 100);
+
+                const progressEl = document.getElementById('syncProgress');
+                if (progressEl) {
+                    progressEl.innerHTML = `네이버와 동기화 중입니다...<br>구간: ${offset}~${Math.min(offset + chunkSize, totalDays)}일 전<br>진행률: ${progress}%`;
+                }
+
+                const url = `/api/orders?sync=true&days=${chunkSize}&offset=${offset}`;
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(`동기화 중 오류 (구간 ${offset}): ${data.error || response.statusText}`);
+                }
+            }
+
+            if (lastSynced) {
+                lastSynced.textContent = '동기화 완료!';
                 setTimeout(() => { lastSynced.textContent = ''; }, 5000);
             }
+
+            // 완료 후 전체 데이터 다시 로드 (DB 조회)
+            await loadOrders(false);
+            return;
+
         } else {
-            throw new Error(data.error || '주문 정보를 불러오는데 실패했습니다.');
+            // [일반 조회] 구글시트 DB 조회
+            const response = await fetch('/api/orders');
+            const data = await response.json();
+
+            if (response.ok) {
+                renderOrders(data.orders);
+            } else {
+                throw new Error(data.error || '주문 정보를 불러오는데 실패했습니다.');
+            }
         }
     } catch (error) {
+        console.error(error);
         orderList.innerHTML = `<div class="error">오류가 발생했습니다: ${error.message}</div>`;
     } finally {
-        loading.classList.remove('active');
-        if (btn) btn.disabled = false;
-        if (syncBtn) syncBtn.disabled = false;
+        if (!isSync) {
+            loading.classList.remove('active');
+            if (btn) btn.disabled = false;
+            if (syncBtn) syncBtn.disabled = false;
+        }
     }
 }
 
