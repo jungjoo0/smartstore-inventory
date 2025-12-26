@@ -244,26 +244,31 @@ def get_product_list(access_token):
         return []
 
 
-# 주문 내역을 조회하는 함수입니다. (최근 24시간 변동 내역)
+# 주문 내역을 조회하는 함수입니다. (최근 3개월, 구매확정 제외)
 def get_order_list(access_token):
     if not access_token:
         return []
 
-    # 최근 변경 주문 조회 API URL
-    url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/last-changed-statuses"
+    # 조건별 상품 주문 조회 API URL (최근 3개월)
+    url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders"
     
     headers = {
         'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json'
     }
     
-    # 현재 시간에서 24시간 전 (ISO 8601 형식)
     import datetime
-    last_changed_from = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+    now = datetime.datetime.utcnow()
+    # 3개월 전 (90일)
+    from_date = (now - datetime.timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+    to_date = now.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
     
     # 쿼리 파라미터
     params = {
-        'lastChangedFrom': last_changed_from
+        'rangeType': 'PAYMENT_DATE',
+        'from': from_date,
+        'to': to_date,
+        'limit': 500 # 최대 500개
     }
 
     try:
@@ -271,45 +276,30 @@ def get_order_list(access_token):
         response.raise_for_status()
         
         data = response.json()
-        last_change_statuses = data.get('data', {}).get('lastChangeStatuses', [])
+        product_orders = data.get('data', [])
         
-        # 상품 주문 번호 리스트 추출
-        product_order_ids = [item['productOrderId'] for item in last_change_statuses]
-        
-        if not product_order_ids:
-            return []
-
-        # 상품 주문 상세 조회 (최대 300개 제한이 있으므로, 필요시 루프 처리 필요하나 여기선 단순화)
-        # API: POST /external/v1/pay-order/seller/product-orders/query
-        query_url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/query"
-        
-        payload = {
-            "productOrderIds": product_order_ids
-        }
-        
-        query_response = requests.post(query_url, headers=headers, json=payload)
-        query_response.raise_for_status()
-        
-        query_data = query_response.json()
-        product_orders = query_data.get('data', [])
+        # 만약 GET 요청 결과가 ID 리스트 형태라면 상세 조회가 필요할 수 있으나,
+        # 'Conditional Product Order Detailed Information Inquiry'는 상세 정보를 반환한다고 가정합니다.
+        # 응답 구조가 /query와 유사(item 안에 'productOrder', 'order' 존재)하다고 가정하고 처리.
         
         orders_info = []
         for item in product_orders:
-            # API 응답 구조: item 안에 'order'와 'productOrder'가 있음
-            # productOrder 안에 shippingAddress가 있음
-            
             product_order = item.get('productOrder', {})
             order_detail = item.get('order', {})
+            
+            # 필터링: 구매확정(PURCHASE_DECIDED) 제외
+            status = product_order.get('productOrderStatus')
+            if status == 'PURCHASE_DECIDED':
+                continue
+            
             shipping_address = product_order.get('shippingAddress', {})
             
-            # 구매자명: 배송지 수령인(name) 우선, 없으면 주문자명(ordererName)
+            # 구매자명
             buyer_name = shipping_address.get('name')
             if not buyer_name:
                 buyer_name = order_detail.get('ordererName', 'N/A')
             
-            # 주문일시: 상품주문(placeOrderDate) 또는 결제일(paymentDate) 또는 주문정보(orderDate)
-            # 예시 JSON에는 productOrder에 orderDate가 없고 placeOrderDate가 있음
-            # order레벨에는 orderDate가 있음
+            # 주문일시
             order_date = order_detail.get('orderDate')
             if not order_date:
                 order_date = product_order.get('placeOrderDate')
@@ -322,13 +312,12 @@ def get_order_list(access_token):
                 'product_option': product_order.get('productOption'),
                 'quantity': product_order.get('quantity'),
                 'buyer_name': buyer_name,
-                'status': product_order.get('productOrderStatus'),
+                'status': status,
             }
             orders_info.append(order_info)
             
         # 최신순 정렬
         orders_info.sort(key=lambda x: x['order_date'], reverse=True)
-            
         return orders_info
 
     except Exception as e:
