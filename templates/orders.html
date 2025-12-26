@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#007bff">
-    <title>페이블리 재고 관리</title>
+    <title>주문 내역 - 페이블리 재고 관리</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 
@@ -15,12 +15,12 @@
             <div class="header-content">
                 <div>
                     <h1>페이블리 재고 관리</h1>
-                    <p class="subtitle">실시간 상품 및 옵션별 재고 현황</p>
+                    <p class="subtitle">최근 주문 내역 (24시간)</p>
                 </div>
                 <div class="header-controls">
                     <nav class="main-nav">
-                        <a href="{{ url_for('index') }}" class="nav-link active">재고 관리</a>
-                        <a href="{{ url_for('orders') }}" class="nav-link">주문 내역</a>
+                        <a href="{{ url_for('index') }}" class="nav-link">재고 관리</a>
+                        <a href="{{ url_for('orders') }}" class="nav-link active">주문 내역</a>
                     </nav>
                     <a href="{{ url_for('logout') }}" class="btn btn-logout">로그아웃</a>
                 </div>
@@ -28,17 +28,19 @@
         </header>
 
         <div class="controls">
-            <button class="btn" onclick="loadProducts()">🔄새로고침</button>
+            <button class="btn" onclick="loadOrders()">🔄새로고침</button>
             <div class="loading" id="loading">
                 <div class="spinner"></div>
-                <span>상품 정보를 불러오는 중...</span>
+                <span>주문 정보를 불러오는 중...</span>
             </div>
         </div>
 
-        <div class="products-grid" id="productsGrid"></div>
+        <div class="order-list" id="orderList">
+            <div class="no-data">주문 정보를 불러오는 중입니다...</div>
+        </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/orders.js') }}"></script>
 </body>
 
 </html>

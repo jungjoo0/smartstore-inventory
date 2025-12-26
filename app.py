@@ -244,6 +244,81 @@ def get_product_list(access_token):
         return []
 
 
+# 주문 내역을 조회하는 함수입니다. (최근 24시간 변동 내역)
+def get_order_list(access_token):
+    if not access_token:
+        return []
+
+    # 최근 변경 주문 조회 API URL
+    url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/last-changed-statuses"
+    
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    # 현재 시간에서 24시간 전 (ISO 8601 형식)
+    import datetime
+    last_changed_from = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+    
+    # 쿼리 파라미터
+    params = {
+        'lastChangedFrom': last_changed_from
+    }
+
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        
+        data = response.json()
+        last_change_statuses = data.get('data', {}).get('lastChangeStatuses', [])
+        
+        # 상품 주문 번호 리스트 추출
+        product_order_ids = [item['productOrderId'] for item in last_change_statuses]
+        
+        if not product_order_ids:
+            return []
+
+        # 상품 주문 상세 조회 (최대 300개 제한이 있으므로, 필요시 루프 처리 필요하나 여기선 단순화)
+        # API: POST /external/v1/pay-order/seller/product-orders/query
+        query_url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/query"
+        
+        payload = {
+            "productOrderIds": product_order_ids
+        }
+        
+        query_response = requests.post(query_url, headers=headers, json=payload)
+        query_response.raise_for_status()
+        
+        query_data = query_response.json()
+        product_orders = query_data.get('data', [])
+        
+        orders_info = []
+        for order in product_orders:
+            shipping_address = order.get('shippingAddress', {})
+            product_order = order.get('productOrder', {})
+            
+            order_info = {
+                'order_date':  product_order.get('orderDate', 'N/A'),
+                'product_order_id': product_order.get('productOrderId'),
+                'product_name': product_order.get('productName'),
+                'product_option': product_order.get('productOption'),
+                'quantity': product_order.get('quantity'),
+                'buyer_name': shipping_address.get('name', 'N/A'),
+                'status': product_order.get('productOrderStatus'),
+            }
+            orders_info.append(order_info)
+            
+        # 최신순 정렬
+        orders_info.sort(key=lambda x: x['order_date'], reverse=True)
+            
+        return orders_info
+
+    except Exception as e:
+        print(f"주문 조회 오류: {e}")
+        return []
+
+
 # Flask 라우트
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -276,8 +351,15 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    """메인 페이지"""
+    """메인 페이지 (재고 관리)"""
     return render_template('index.html')
+
+
+@app.route('/orders')
+@login_required
+def orders():
+    """주문 내역 페이지"""
+    return render_template('orders.html')
 
 
 @app.route('/api/server-ip')
@@ -309,6 +391,20 @@ def api_products():
     
     products = get_product_list(access_token)
     return jsonify({'products': products})
+
+
+@app.route('/api/orders')
+@login_required
+def api_orders():
+    """주문 목록 API"""
+    load_dotenv()
+    access_token = token()
+    
+    if not access_token:
+        return jsonify({'error': '토큰 발급 실패'}), 500
+    
+    orders = get_order_list(access_token)
+    return jsonify({'orders': orders})
 
 
 # 메인 실행 블록
