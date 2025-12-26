@@ -52,6 +52,7 @@ def sync_orders_to_sheet(new_orders):
     네이버에서 가져온 주문 데이터를 구글 시트에 동기화합니다.
     - 기존 주문 ID가 있으면 상태를 업데이트
     - 새로운 주문이면 추가
+    **API 제한(60회/분)을 피하기 위해 배치 처리(Batch Processing)를 사용합니다.**
     """
     client = connect_to_sheets()
     if not client:
@@ -61,11 +62,10 @@ def sync_orders_to_sheet(new_orders):
     if not worksheet:
         return {"status": "error", "message": "스프레드시트를 찾을 수 없습니다. 'SmartStore_Orders' 이름의 시트를 만들고 공유했는지 확인해주세요."}
 
-    # 현재 시트 데이터 가져오기 (헤더 제외)
+    # 현재 시트 데이터 가져오기
     try:
         existing_records = worksheet.get_all_records()
     except:
-        # 헤더가 없거나 비어있는 경우
         existing_records = []
 
     # 헤더가 없으면 생성
@@ -74,47 +74,64 @@ def sync_orders_to_sheet(new_orders):
         worksheet.append_row(headers)
         existing_records = []
 
-    # Product Order ID를 키로 하는 딕셔너리 생성 (빠른 검색용)
-    existing_map = {str(item.get('product_order_id')): i + 2 for i, item in enumerate(existing_records)}
-    # i+2 이유: 1-based index + Header row(1)
-
+    # Product Order ID 매핑 (ID -> Row Index)
+    # 1-based index, 헤더가 1행이므로 첫 데이터는 2행부터 시작
+    # existing_records는 0번 인덱스가 실제 시트의 2행
+    id_to_row_map = {str(item.get('product_order_id')): i + 2 for i, item in enumerate(existing_records)}
+    
+    rows_to_append = []
+    # 업데이트할 셀들: (Row, Col, Value) - gspread Cell 객체 리스트로 만듦
+    cells_to_update = [] 
+    
     added_count = 0
     updated_count = 0
 
-    # 최신순 정렬 (오래된 것부터 쌓기 위해 역순으로 처리할 수도 있지만, 여기선 그냥 진행)
-    # 네이버 데이터는 최신순으로 옴.
-    
     for order in new_orders:
         p_id = str(order.get('product_order_id'))
+        current_status = order.get('status', '')
         
-        # 데이터 포맷팅
-        row_data = [
-            order.get('order_date', ''),
-            p_id,
-            order.get('order_id', ''),
-            order.get('product_name', ''),
-            order.get('product_option', ''),
-            order.get('quantity', 0),
-            order.get('buyer_name', ''),
-            order.get('status', '')
-        ]
-
-        if p_id in existing_map:
-            # 이미 존재하는 주문 -> 상태 업데이트 확인
-            row_idx = existing_map[p_id]
-            # 상태 컬럼은 8번째 (H)
-            # 기존 상태와 비교 (API 호출 줄이기 위해)
-            # gspread는 셀 단위 업데이트 비용이 비싸므로, 
-            # 배치 처리가 좋지만 간단하게 구현.
-            # 여기서는 편의상 상태만 업데이트
-            current_status = worksheet.cell(row_idx, 8).value
-            if current_status != order.get('status'):
-                worksheet.update_cell(row_idx, 8, order.get('status'))
+        if p_id in id_to_row_map:
+            # [이미 존재함] -> 상태 업데이트 체크
+            row_idx = id_to_row_map[p_id]
+            # existing_records 데이터와 비교 (API 호출 아님)
+            # existing_records[row_idx - 2] 가 해당 rec
+            # 하지만 여기서 단순 비교를 위해 Cell 객체 생성 로직으로 바로 감
+            
+            # 기존 레코드에서 가져와 비교 (API read 줄이기)
+            record = existing_records[row_idx - 2]
+            if record.get('status') != current_status:
+                # 상태 변경 필요 -> Batch Update 목록에 추가
+                # 상태 컬럼은 8번째 (H)
+                cells_to_update.append(gspread.Cell(row_idx, 8, current_status))
                 updated_count += 1
         else:
-            # 새로운 주문 -> 추가
-            worksheet.append_row(row_data)
+            # [새 주문] -> Batch Append 목록에 추가
+            row_data = [
+                order.get('order_date', ''),
+                p_id,
+                order.get('order_id', ''),
+                order.get('product_name', ''),
+                order.get('product_option', ''),
+                order.get('quantity', 0),
+                order.get('buyer_name', ''),
+                current_status
+            ]
+            rows_to_append.append(row_data)
             added_count += 1
+
+    # 1. 일괄 추가 (Batch Append)
+    if rows_to_append:
+        try:
+            worksheet.append_rows(rows_to_append)
+        except Exception as e:
+            print(f"Batch Append Error: {e}")
+
+    # 2. 일괄 업데이트 (Batch Update)
+    if cells_to_update:
+        try:
+            worksheet.update_cells(cells_to_update)
+        except Exception as e:
+            print(f"Batch Update Error: {e}")
 
     return {"status": "success", "added": added_count, "updated": updated_count}
 

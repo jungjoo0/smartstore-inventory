@@ -46,6 +46,9 @@ async function loadOrders(isSync = false) {
                     const data = await response.json();
                     throw new Error(`동기화 중 오류 (구간 ${offset}): ${data.error || response.statusText}`);
                 }
+
+                // API 속도 제한 방지를 위한 안전 딜레이 (1.5초)
+                await new Promise(resolve => setTimeout(resolve, 1500));
             }
 
             if (lastSynced) {
