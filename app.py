@@ -258,50 +258,51 @@ def get_order_list(access_token):
     }
     
     import datetime
+    import concurrent.futures
     
     # Timezone: KST (UTC+9)
-    # 네이버 API는 타임존이 명시된 ISO 형식을 선호합니다 (+09:00)
     KST = datetime.timezone(datetime.timedelta(hours=9))
     now = datetime.datetime.now(KST)
     
     all_product_orders = []
+    days_to_fetch = 90  # 3개월
     
-    # 3개월 (90일) 데이터를 하루(24시간) 단위로 끊어서 조회
-    # (API 제한: 조회 기간 차이가 24시간을 넘을 수 없음)
-    days_to_fetch = 90
-    
-    for i in range(days_to_fetch):
-        # i=0: 오늘~어제, i=1: 어제~그제 ...
-        end_time = now - datetime.timedelta(days=i)
+    # 날짜별 조회 함수 (병렬 실행용)
+    def fetch_orders_by_date(day_offset):
+        end_time = now - datetime.timedelta(days=day_offset)
         start_time = end_time - datetime.timedelta(days=1)
         
-        # 날짜 포맷: yyyy-MM-dd'T'HH:mm:ss.SSS+09:00
         to_date = end_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
         from_date = start_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
         
         params = {
-            'rangeType': 'PAYED_DATETIME', # 결제일 기준
+            'rangeType': 'PAYED_DATETIME',
             'from': from_date,
             'to': to_date
         }
         
         try:
-            response = requests.get(url, headers=headers, params=params)
-            
-            if response.status_code == 200:
-                data = response.json()
-                orders = data.get('data', [])
+            # 타임아웃 5초 설정 (너무 오래 걸리는 요청은 건너뜀)
+            resp = requests.get(url, headers=headers, params=params, timeout=5)
+            if resp.status_code == 200:
+                return resp.json().get('data', [])
+            return []
+        except Exception:
+            return []
+
+    # ThreadPoolExecutor를 사용하여 병렬 요청 (최대 10개 스레드)
+    # 90번의 요청을 병렬로 처리하여 속도 대폭 개선
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # 0일부터 89일까지의 offset을 병렬로 실행
+        future_to_offset = {executor.submit(fetch_orders_by_date, i): i for i in range(days_to_fetch)}
+        
+        for future in concurrent.futures.as_completed(future_to_offset):
+            try:
+                orders = future.result()
                 if orders:
                     all_product_orders.extend(orders)
-            else:
-                # 400 등 에러가 나더라도, 전체 로직을 중단하지 않고 로그만 남기고 넘김 (Fail-soft)
-                # 다만 빈 데이터 구간일 수도 있으므로 과도한 로그 출력은 자제
-                 pass
-                 # print(f"API 호출 실패 ({from_date} ~ {to_date}): {response.status_code}")
-
-        except Exception as e:
-            print(f"API 루프 에러 ({from_date}): {e}")
-            continue
+            except Exception:
+                continue
 
     # 데이터 가공 및 중복 제거
     orders_info = []
@@ -311,7 +312,6 @@ def get_order_list(access_token):
         product_order = item.get('productOrder', {})
         p_id = product_order.get('productOrderId')
         
-        # 중복 체크
         if not p_id or p_id in processed_ids:
             continue
         processed_ids.add(p_id)
@@ -324,12 +324,10 @@ def get_order_list(access_token):
         order_detail = item.get('order', {})
         shipping_address = product_order.get('shippingAddress', {})
         
-        # 구매자명
         buyer_name = shipping_address.get('name')
         if not buyer_name:
             buyer_name = order_detail.get('ordererName', 'N/A')
         
-        # 주문일시
         order_date = order_detail.get('orderDate')
         if not order_date:
             order_date = product_order.get('placeOrderDate')
@@ -346,7 +344,6 @@ def get_order_list(access_token):
         }
         orders_info.append(order_info)
         
-    # 최신순 정렬
     orders_info.sort(key=lambda x: x['order_date'], reverse=True)
     return orders_info
 
