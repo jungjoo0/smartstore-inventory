@@ -1,19 +1,58 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // 기본 날짜 설정 (최근 3일)
+    const today = new Date();
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(today.getDate() - 3);
+
+    const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    document.getElementById('startDate').value = formatDate(threeDaysAgo);
+    document.getElementById('endDate').value = formatDate(today);
+
+    // 조회 버튼 이벤트 리스너
+    document.getElementById('searchBtn').addEventListener('click', loadOrders);
+
+    // 초기 로드
     loadOrders();
 });
 
 async function loadOrders() {
     const loading = document.getElementById('loading');
     const orderList = document.getElementById('orderList');
-    const btn = document.querySelector('.btn');
+    const btn = document.getElementById('searchBtn'); // 버튼 ID 변경 대응
+    const lastUpdated = document.getElementById('lastUpdated');
+
+    // 날짜 값 가져오기
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    if (!startDate || !endDate) {
+        alert('시작일과 종료일을 모두 선택해주세요.');
+        return;
+    }
+
+    if (startDate > endDate) {
+        alert('시작일이 종료일보다 늦을 수 없습니다.');
+        return;
+    }
 
     // 로딩 상태 표시
     loading.classList.add('active');
     btn.disabled = true;
     orderList.innerHTML = '<div class="no-data">주문 정보를 불러오는 중입니다...</div>';
 
+    if (lastUpdated) {
+        lastUpdated.textContent = `조회 기간: ${startDate} ~ ${endDate}`;
+    }
+
     try {
-        const response = await fetch('/api/orders');
+        // 쿼리 파라미터로 날짜 전달
+        const response = await fetch(`/api/orders?start_date=${startDate}&end_date=${endDate}`);
         const data = await response.json();
 
         if (response.ok) {

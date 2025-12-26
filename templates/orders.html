@@ -14,7 +14,18 @@
         <header>
             <div class="header-content">
                 <div>
-                    <h1>페이블리 재고 관리</h1>
+                    <div class="header-container">
+                        <h1>📦 주문 내역 조회</h1>
+                        <div class="date-range-controls">
+                            <label for="startDate">시작일:</label>
+                            <input type="date" id="startDate" name="startDate">
+                            <span>~</span>
+                            <label for="endDate">종료일:</label>
+                            <input type="date" id="endDate" name="endDate">
+                            <button id="searchBtn" class="btn-search">조회</button>
+                        </div>
+                    </div>
+                    <div class="last-updated" id="lastUpdated"></div>
                     <p class="subtitle">최근 주문 내역 (24시간)</p>
                 </div>
                 <div class="header-controls">

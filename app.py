@@ -244,8 +244,8 @@ def get_product_list(access_token):
         return []
 
 
-# 주문 내역을 조회하는 함수입니다. (최근 3개월, 구매확정 제외)
-def get_order_list(access_token):
+# 주문 내역을 조회하는 함수입니다. (start_date, end_date는 'YYYY-MM-DD' 형식의 문자열)
+def get_order_list(access_token, start_date_str=None, end_date_str=None):
     if not access_token:
         return []
 
@@ -259,31 +259,75 @@ def get_order_list(access_token):
     
     import datetime
     import concurrent.futures
+    import math
     
     # Timezone: KST (UTC+9)
     KST = datetime.timezone(datetime.timedelta(hours=9))
     now = datetime.datetime.now(KST)
     
+    # 날짜 파싱 및 범위 계산
+    if start_date_str and end_date_str:
+        try:
+            # 입력받은 날짜 문자열을 KST 날짜 객체로 변환 (시간은 00:00:00 기준)
+            s_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d').replace(tzinfo=KST)
+            e_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d').replace(tzinfo=KST)
+            
+            # 종료일은 해당 일의 23:59:59까지 포함하도록 설정하는 것이 일반적이나,
+            # 여기서는 로직 단순화를 위해 날짜 차이(days) 계산에 집중
+            
+            # e_date가 s_date보다 과거면 교체
+            if s_date > e_date:
+                s_date, e_date = e_date, s_date
+                
+            # 일수 차이 계산 (+1 해야 당일 포함)
+            delta = (e_date - s_date).days + 1
+            days_to_fetch = delta
+            target_end_date = e_date # 루프 시작 기준점
+            
+        except ValueError:
+            # 파싱 실패 시 기본값 (최근 3일)
+            days_to_fetch = 3
+            target_end_date = now
+    else:
+        # 기본값: 최근 3일
+        days_to_fetch = 3
+        target_end_date = now
+
+    # 안전 장치: 최대 90일까지만 허용 (서버 부하 방지)
+    if days_to_fetch > 90:
+        days_to_fetch = 90
+
     all_product_orders = []
-    days_to_fetch = 90  # 3개월
     
     # 날짜별 조회 함수 (병렬 실행용)
     def fetch_orders_by_date(day_offset):
-        end_time = now - datetime.timedelta(days=day_offset)
-        start_time = end_time - datetime.timedelta(days=1)
+        # target_end_date 기준 day_offset만큼 전의 날짜
+        # 예: offset=0 -> target_end_date 당일
+        base_date = target_end_date - datetime.timedelta(days=day_offset)
         
-        to_date = end_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
-        from_date = start_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
+        # 검색 기간: 해당 날짜의 00:00:00 ~ 23:59:59 (+09:00)
+        # Naver API는 from~to 간격이 24시간 이내여야 함.
+        
+        # 시작: 해당일 00:00:00
+        start_dt = base_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        # 종료: 해당일 23:59:59 (또는 다음날 00:00:00 직전)
+        end_dt = base_date.replace(hour=23, minute=59, second=59, microsecond=999000)
+        
+        # 만약 미래 날짜라면 조회 불필요 (오늘까지만)
+        if start_dt > now:
+            return []
+            
+        to_date_str = end_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
+        from_date_str = start_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
         
         params = {
             'rangeType': 'PAYED_DATETIME',
-            'from': from_date,
-            'to': to_date
+            'from': from_date_str,
+            'to': to_date_str
         }
         
         try:
-            # 타임아웃 5초 설정 (너무 오래 걸리는 요청은 건너뜀)
-            resp = requests.get(url, headers=headers, params=params, timeout=5)
+            resp = requests.get(url, headers=headers, params=params, timeout=10) # 타임아웃 10초로 조금 여유 둠
             if resp.status_code == 200:
                 return resp.json().get('data', [])
             return []
@@ -291,9 +335,10 @@ def get_order_list(access_token):
             return []
 
     # ThreadPoolExecutor를 사용하여 병렬 요청 (최대 10개 스레드)
-    # 90번의 요청을 병렬로 처리하여 속도 대폭 개선
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        # 0일부터 89일까지의 offset을 병렬로 실행
+    # 요청 수가 적으면 스레드 수도 조절
+    max_workers = min(10, days_to_fetch) if days_to_fetch > 0 else 1
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_offset = {executor.submit(fetch_orders_by_date, i): i for i in range(days_to_fetch)}
         
         for future in concurrent.futures.as_completed(future_to_offset):
@@ -346,7 +391,6 @@ def get_order_list(access_token):
         
     orders_info.sort(key=lambda x: x['order_date'], reverse=True)
     return orders_info
-
 
 
 
@@ -436,7 +480,11 @@ def api_orders():
     if not access_token:
         return jsonify({'error': '토큰 발급 실패'}), 500
     
-    orders = get_order_list(access_token)
+    # 쿼리 파라미터 받기
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    orders = get_order_list(access_token, start_date, end_date)
     return jsonify({'orders': orders})
 
 
