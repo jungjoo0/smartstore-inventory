@@ -68,10 +68,26 @@ def sync_orders_to_sheet(new_orders):
     except:
         existing_records = []
 
-    # 헤더가 없으면 생성
-    if not existing_records and worksheet.row_count == 0:
+    # 헤더가 없으면 생성 (A1 셀이 비었는지 확인)
+    is_empty_header = True
+    try:
+        # A1 셀 값 확인 (비어있으면 None 또는 '')
+        val = worksheet.acell('A1').value
+        if val:
+            is_empty_header = False
+    except:
+        pass
+
+    if is_empty_header:
         headers = ["order_date", "product_order_id", "order_id", "product_name", "product_option", "quantity", "buyer_name", "status"]
-        worksheet.append_row(headers)
+        if not existing_records: # 레코드가 없으면 append_row
+             worksheet.append_row(headers)
+        else:
+             # 레코드는 있는데 헤더가 없는 경우 (거의 없겠지만) insert_row
+             worksheet.insert_row(headers, index=1)
+        
+        # 헤더 추가했으니 existing_records 다시 로드할 수도 있지만, 
+        # sync 로직에서는 existing_records가 비어있을 때 주로 타므로 패스
         existing_records = []
 
     # Product Order ID 매핑 (ID -> Row Index)
