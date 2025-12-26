@@ -134,16 +134,21 @@ function renderOrders(orders) {
         `;
 
         // 상세 주문 내역 행들
+        // 부모 테이블의 컬럼 구조: [Icon] [Date] [ID] [Status] [Product] [Qty] [Buyer]
+        // 내부 테이블도 동일한 7개 컬럼을 유지해야 CSS table-layout: fixed가 제대로 동작함
         groupOrders.forEach(order => {
             html += `
                  <tr>
-                    <td style="width: 15%;"></td>
+                    <td></td> <!-- Icon Column -->
+                    <td></td> <!-- Date Column -->
+                    <td></td> <!-- ID Column -->
                     <td><span class="status-badge ${getStatusClass(order.status)}">${getStatusText(order.status)}</span></td>
                     <td class="product-info-cell">
                         <div class="order-product-name">${order.product_name}</div>
                         <div class="order-option">${order.product_option || '-'}</div>
                     </td>
                     <td class="order-quantity">${order.quantity}개</td>
+                    <td></td> <!-- Buyer Column -->
                  </tr>
              `;
         });

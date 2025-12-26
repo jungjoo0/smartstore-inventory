@@ -449,27 +449,90 @@ h1 {
 
 .order-table {
     width: 100%;
+    table-layout: fixed;
+    /* Fixed layout for consistent widths */
     border-collapse: collapse;
     font-size: 0.9rem;
+    min-width: 1000px;
+    /* Force minimum width to prevent squeezing */
 }
+
+/* Define Column Widths using nth-child */
+.order-table th:nth-child(1),
+.order-table td:nth-child(1) {
+    width: 50px;
+}
+
+/* Icon */
+.order-table th:nth-child(2),
+.order-table td:nth-child(2) {
+    width: 150px;
+}
+
+/* Date */
+.order-table th:nth-child(3),
+.order-table td:nth-child(3) {
+    width: 140px;
+}
+
+/* Order ID */
+.order-table th:nth-child(4),
+.order-table td:nth-child(4) {
+    width: 100px;
+}
+
+/* Status */
+.order-table th:nth-child(5),
+.order-table td:nth-child(5) {
+    width: auto;
+}
+
+/* Product Title (Flexible) */
+.order-table th:nth-child(6),
+.order-table td:nth-child(6) {
+    width: 80px;
+}
+
+/* Qty */
+.order-table th:nth-child(7),
+.order-table td:nth-child(7) {
+    width: 120px;
+}
+
+/* Buyer */
+
 
 .order-table th {
     background: #f1f5f9;
-    padding: 1rem 1.5rem;
-    text-align: left;
+    padding: 1rem 0.5rem;
+    text-align: center;
+    /* Center Align Headers */
     font-weight: 600;
     color: var(--text-muted);
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    /* Prevent Wrapping */
 }
 
 .order-table td {
-    padding: 1.25rem 1.5rem;
+    padding: 1rem 0.5rem;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-color);
     vertical-align: middle;
+    text-align: center;
+    /* Default Center Align */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Product Info Cell - Left Align */
+.order-table td:nth-child(5) {
+    text-align: left;
+    white-space: normal;
 }
 
 .order-table tr:hover {
@@ -488,11 +551,13 @@ h1 {
 .status-badge {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     padding: 0.35rem 0.75rem;
     border-radius: 2rem;
     font-size: 0.75rem;
     font-weight: 700;
     line-height: 1;
+    white-space: nowrap;
 }
 
 .status-payed {
@@ -500,43 +565,78 @@ h1 {
     color: #0369a1;
 }
 
-/* Sky Blue */
 .status-dispatched {
     background: #dcfce7;
     color: #15803d;
 }
 
-/* Green */
 .status-canceled {
     background: #fee2e2;
     color: #b91c1c;
 }
 
-/* Red */
 .status-default {
     background: #f1f5f9;
     color: #475569;
 }
 
-/* Slate */
-
-/* Accordion Detail */
+/* Accordion Detail Table */
 .order-group-details td {
     background: #f8fafc;
-    padding: 1.5rem;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+    padding: 0;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .detail-container {
     background: white;
-    border-radius: var(--border-radius-sm);
-    border: 1px solid var(--border-color);
-    overflow: hidden;
+}
+
+.detail-table {
+    width: 100%;
+    table-layout: fixed;
+    /* Match parent */
+    border-collapse: collapse;
+}
+
+/* Match Parent Column Widths */
+.detail-table td:nth-child(1) {
+    width: 50px;
+}
+
+.detail-table td:nth-child(2) {
+    width: 150px;
+}
+
+.detail-table td:nth-child(3) {
+    width: 140px;
+}
+
+.detail-table td:nth-child(4) {
+    width: 100px;
+}
+
+.detail-table td:nth-child(5) {
+    width: auto;
+}
+
+.detail-table td:nth-child(6) {
+    width: 80px;
+}
+
+.detail-table td:nth-child(7) {
+    width: 120px;
 }
 
 .detail-table td {
-    padding: 1rem;
+    padding: 0.75rem 0.5rem;
     border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.detail-table td:nth-child(5) {
+    text-align: left;
+    white-space: normal;
 }
 
 .detail-table tr:last-child td {
@@ -549,27 +649,11 @@ h1 {
         padding: 1rem 0.5rem;
     }
 
-    .header-content {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1.5rem;
-    }
-
-    .header-controls {
-        width: 100%;
-        justify-content: space-between;
-    }
-
     .products-grid {
         grid-template-columns: 1fr;
     }
 
-    .order-table th,
-    .order-table td {
-        padding: 1rem 0.75rem;
-    }
-
-    .product-info-cell {
-        min-width: 150px;
+    .table-responsive {
+        overflow-x: auto;
     }
 }
