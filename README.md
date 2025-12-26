@@ -9,21 +9,27 @@
 - 🔄 자동 새로고침 기능
 - 📱 반응형 웹 디자인 (모바일 지원)
 - ⚠️ 재고 부족 알림
+- 🔒 보안 로그인 시스템 (관리자 전용)
 
 ## 기술 스택
 
 - Python 3.x
-- Flask
+- Flask / Flask-Login
 - Naver Commerce API v2
 - HTML/CSS/JavaScript
 
 ## 환경 변수 설정
 
-`.env` 파일에 다음 정보 입력:
+`.env` 파일(또는 Render Environment)에 다음 정보 입력:
 
-```
+```bash
+# 네이버 커머스 API 설정
 NAVER_CLIENT_ID=your_client_id
 NAVER_CLIENT_SECRET=your_client_secret
+
+# 로그인 & 세션 설정
+ADMIN_PASSWORD=your_password  # (선택) 로그인 비밀번호. 미설정 시 'admin'
+SECRET_KEY=random_secret_key  # (필수) 세션 보안 키. 아무 복잡한 문자열 입력
 ```
 
 ## 로컬 실행
