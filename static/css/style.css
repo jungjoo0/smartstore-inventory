@@ -539,4 +539,57 @@ h1 {
     .order-date {
         font-size: 0.8rem;
     }
+
+    /* Order List Accordion Styles */
+    .order-group-header {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .order-group-header:hover {
+        background-color: #f1f3f5;
+    }
+
+    .toggle-icon {
+        font-size: 0.8rem;
+        color: var(--muted-color);
+        text-align: center;
+    }
+
+    .order-group-details {
+        background-color: #f8f9fa;
+    }
+
+    .detail-container {
+        padding: 0.5rem 1rem;
+        border-radius: 0.25rem;
+        background: white;
+        border: 1px solid var(--border-color);
+    }
+
+    .detail-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .detail-table td {
+        padding: 0.75rem 0.5rem;
+        border-bottom: 1px solid #eee;
+        font-size: 0.9rem;
+    }
+
+    .detail-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .order-id {
+        font-family: monospace;
+        font-weight: 500;
+        color: #495057;
+    }
+
+    /* 모바일에서 아코디언 스타일 조정 */
+    .detail-container {
+        padding: 0.5rem;
+    }
 }

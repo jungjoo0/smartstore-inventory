@@ -37,12 +37,24 @@ function renderOrders(orders) {
         return;
     }
 
+    // 주문 번호 기준으로 그룹화
+    const groups = {};
+    orders.forEach(order => {
+        const orderId = order.order_id || 'unknown';
+        if (!groups[orderId]) {
+            groups[orderId] = [];
+        }
+        groups[orderId].push(order);
+    });
+
     let html = `
         <div class="table-responsive">
             <table class="order-table">
                 <thead>
                     <tr>
+                        <th style="width: 50px;"></th>
                         <th>주문일시</th>
+                        <th>주문번호</th>
                         <th>상태</th>
                         <th>상품명 / 옵션</th>
                         <th>수량</th>
@@ -52,49 +64,93 @@ function renderOrders(orders) {
                 <tbody>
     `;
 
-    orders.forEach(order => {
+    // 그룹별 렌더링
+    Object.keys(groups).forEach(orderId => {
+        const groupOrders = groups[orderId];
+        const firstOrder = groupOrders[0]; // 대표 정보 (첫 번째 주문 기준)
+        const rowId = `row-${orderId}`;
+        const detailRowId = `detail-${orderId}`;
+        const itemCount = groupOrders.length;
+
         // 날짜 포맷팅
         let dateStr = '-';
-        if (order.order_date && order.order_date !== 'N/A') {
+        if (firstOrder.order_date && firstOrder.order_date !== 'N/A') {
             try {
-                dateStr = new Date(order.order_date).toLocaleString('ko-KR', {
+                dateStr = new Date(firstOrder.order_date).toLocaleString('ko-KR', {
                     month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
                 });
             } catch (e) {
-                dateStr = order.order_date;
+                dateStr = firstOrder.order_date;
             }
         }
 
-        // 상태 한글 변환
-        const statusMap = {
-            'PAYED': '결제완료',
-            'DISPATCHED': '발송중',
-            'DELIVERING': '배송중',
-            'DELIVERED': '배송완료',
-            'PURCHASE_DECIDED': '구매확정',
-            'EXCHANGED': '교환',
-            'CANCELED': '취소',
-            'RETURNED': '반품',
-            'REFUNDED': '환불'
+        // 상태 한글 변환 함수
+        const getStatusText = (status) => {
+            const statusMap = {
+                'PAYED': '결제완료',
+                'DISPATCHED': '발송중',
+                'DELIVERING': '배송중',
+                'DELIVERED': '배송완료',
+                'PURCHASE_DECIDED': '구매확정',
+                'EXCHANGED': '교환',
+                'CANCELED': '취소',
+                'RETURNED': '반품',
+                'REFUNDED': '환불'
+            };
+            return statusMap[status] || status;
         };
-        const statusText = statusMap[order.status] || order.status;
 
-        // 상태에 따른 클래스
-        let statusClass = 'status-default';
-        if (order.status === 'PAYED') statusClass = 'status-payed';
-        else if (order.status === 'DISPATCHED' || order.status === 'DELIVERING') statusClass = 'status-dispatched';
-        else if (order.status === 'CANCELED' || order.status === 'RETURNED') statusClass = 'status-canceled';
+        const getStatusClass = (status) => {
+            if (status === 'PAYED') return 'status-payed';
+            if (status === 'DISPATCHED' || status === 'DELIVERING') return 'status-dispatched';
+            if (status === 'CANCELED' || status === 'RETURNED') return 'status-canceled';
+            return 'status-default';
+        };
+
+        // 대표 상품명 생성 (예: "A상품 외 2건")
+        let summaryProductName = firstOrder.product_name;
+        if (itemCount > 1) {
+            summaryProductName += ` 외 ${itemCount - 1}건`;
+        }
+
+        // 요약 행 (클릭 시 상세 펼침)
+        html += `
+            <tr class="order-group-header" onclick="toggleDetails('${orderId}')">
+                <td class="toggle-icon" id="icon-${orderId}">▼</td>
+                <td class="order-date">${dateStr}</td>
+                <td class="order-id">${orderId}</td>
+                <td><span class="status-badge ${getStatusClass(firstOrder.status)}">${getStatusText(firstOrder.status)}</span></td>
+                <td class="product-info-cell">
+                    <div class="order-product-name">${summaryProductName}</div>
+                </td>
+                <td class="order-quantity">${itemCount}종</td>
+                <td class="buyer-name">${firstOrder.buyer_name}</td>
+            </tr>
+            <tr id="${detailRowId}" class="order-group-details" style="display: none;">
+                <td colspan="7">
+                    <div class="detail-container">
+                        <table class="detail-table">
+        `;
+
+        // 상세 주문 내역 행들
+        groupOrders.forEach(order => {
+            html += `
+                 <tr>
+                    <td style="width: 15%;"></td>
+                    <td><span class="status-badge ${getStatusClass(order.status)}">${getStatusText(order.status)}</span></td>
+                    <td class="product-info-cell">
+                        <div class="order-product-name">${order.product_name}</div>
+                        <div class="order-option">${order.product_option || '-'}</div>
+                    </td>
+                    <td class="order-quantity">${order.quantity}개</td>
+                 </tr>
+             `;
+        });
 
         html += `
-            <tr>
-                <td class="order-date">${dateStr}</td>
-                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                <td class="product-info-cell">
-                    <div class="order-product-name">${order.product_name}</div>
-                    <div class="order-option">${order.product_option || '-'}</div>
+                        </table>
+                    </div>
                 </td>
-                <td class="order-quantity">${order.quantity}개</td>
-                <td class="buyer-name">${order.buyer_name}</td>
             </tr>
         `;
     });
@@ -106,4 +162,17 @@ function renderOrders(orders) {
     `;
 
     orderList.innerHTML = html;
+}
+
+function toggleDetails(orderId) {
+    const detailRow = document.getElementById(`detail-${orderId}`);
+    const icon = document.getElementById(`icon-${orderId}`);
+
+    if (detailRow.style.display === 'none') {
+        detailRow.style.display = 'table-row';
+        icon.textContent = '▲';
+    } else {
+        detailRow.style.display = 'none';
+        icon.textContent = '▼';
+    }
 }

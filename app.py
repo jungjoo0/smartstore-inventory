@@ -317,6 +317,7 @@ def get_order_list(access_token):
             order_info = {
                 'order_date':  order_date if order_date else 'N/A',
                 'product_order_id': product_order.get('productOrderId'),
+                'order_id': order_detail.get('orderId', 'N/A'),
                 'product_name': product_order.get('productName'),
                 'product_option': product_order.get('productOption'),
                 'quantity': product_order.get('quantity'),
