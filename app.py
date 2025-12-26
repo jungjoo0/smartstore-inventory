@@ -272,7 +272,7 @@ def get_order_list(access_token):
         from_date = start_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
         
         params = {
-            'rangeType': 'PAYMENT_DATE',
+            'rangeType': 'PAYED_DATETIME',
             'from': from_date,
             'to': to_date
             # limit 파라미터는 제거 (API 공식 문서 기준 불확실, 기본값 사용)
