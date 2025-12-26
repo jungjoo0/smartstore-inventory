@@ -294,23 +294,28 @@ def get_order_list(access_token):
         product_orders = query_data.get('data', [])
         
         orders_info = []
-        for order in product_orders:
-            shipping_address = order.get('shippingAddress', {})
-            product_order = order.get('productOrder', {})
-            order_detail = order.get('order', {})
+        for item in product_orders:
+            # API 응답 구조: item 안에 'order'와 'productOrder'가 있음
+            # productOrder 안에 shippingAddress가 있음
             
-            # 구매자명: 배송지 수령인 우선, 없으면 주문자명
+            product_order = item.get('productOrder', {})
+            order_detail = item.get('order', {})
+            shipping_address = product_order.get('shippingAddress', {})
+            
+            # 구매자명: 배송지 수령인(name) 우선, 없으면 주문자명(ordererName)
             buyer_name = shipping_address.get('name')
             if not buyer_name:
-                buyer_name = order_detail.get('orderer', {}).get('name', 'N/A')
+                buyer_name = order_detail.get('ordererName', 'N/A')
             
-            # 주문일시
-            order_date = product_order.get('orderDate')
+            # 주문일시: 상품주문(placeOrderDate) 또는 결제일(paymentDate) 또는 주문정보(orderDate)
+            # 예시 JSON에는 productOrder에 orderDate가 없고 placeOrderDate가 있음
+            # order레벨에는 orderDate가 있음
+            order_date = order_detail.get('orderDate')
             if not order_date:
-                order_date = order_detail.get('orderDate', 'N/A')
+                order_date = product_order.get('placeOrderDate')
             
             order_info = {
-                'order_date':  order_date,
+                'order_date':  order_date if order_date else 'N/A',
                 'product_order_id': product_order.get('productOrderId'),
                 'product_name': product_order.get('productName'),
                 'product_option': product_order.get('productOption'),
