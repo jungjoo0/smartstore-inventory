@@ -245,10 +245,12 @@ def get_product_list(access_token):
 
 
 # 주문 내역을 조회하는 함수입니다. (최근 24시간 변동 내역)
-def get_order_list(access_token, days=1):
+def get_order_list(access_token, days=1, offset=0):
     """
-    네이버 API를 통해 최근 N일간 변동된 주문 내역을 가져옵니다.
-    (기존 24시간 로직을 N일 루프로 확장하여 사용)
+    네이버 API를 통해 변동된 주문 내역을 가져옵니다.
+    offset일 전부터 days일 동안의 데이터를 조회합니다.
+    (예: days=1, offset=0 -> 최근 24시간)
+    (예: days=1, offset=1 -> 24시간 전 ~ 48시간 전)
     """
     url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders"
     headers = {
@@ -262,15 +264,18 @@ def get_order_list(access_token, days=1):
     
     all_orders = []
     
-    # days만큼 하루씩 루프 (API 제한 준수)
-    for i in range(days):
+    # offset부터 offset+days까지 루프
+    # i=0 (offset=0): now - 0일 전 ~ now - 1일 전
+    start_idx = offset
+    end_idx = offset + days
+    
+    for i in range(start_idx, end_idx):
         end_time = now - datetime.timedelta(days=i)
         start_time = end_time - datetime.timedelta(days=1)
         
         last_changed_from = start_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
         
-        # 1. 변경된 주문 ID 조회 (last-changed-statuses)
-        # 주의: 이 API는 24시간 제한이 있으므로 루프 필요
+        # 1. 변경된 주문 ID 조회
         lc_url = f"{url}/last-changed-statuses"
         lc_params = {'lastChangedFrom': last_changed_from}
         
@@ -288,7 +293,7 @@ def get_order_list(access_token, days=1):
             if not product_order_ids:
                 continue
                 
-            # 2. 상세 내역 조회 (query) - 최대 300개씩 분할
+            # 2. 상세 내역 조회
             chunk_size = 300
             for k in range(0, len(product_order_ids), chunk_size):
                 chunk_ids = product_order_ids[k:k+chunk_size]
@@ -443,9 +448,12 @@ def api_orders():
     if sync_requested:
         # [동기화 모드] 네이버 API -> 구글 시트 업데이트
         try:
-            # 1. 네이버에서 최근 변동 내역 조회 (최근 3개월)
-            days = 90
-            naver_orders = get_order_list(access_token, days=days) 
+            # 1. 파라미터 확인 (Client-side Chunking 지원)
+            days = int(request.args.get('days', 3))
+            offset = int(request.args.get('offset', 0))
+            
+            # 2. 네이버 조회
+            naver_orders = get_order_list(access_token, days=days, offset=offset) 
             
             # 2. 구글 시트 동기화
             result = google_sheets.sync_orders_to_sheet(naver_orders)
