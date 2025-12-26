@@ -28,10 +28,13 @@
         </header>
 
         <div class="controls">
-            <button class="btn" onclick="loadOrders()">🔄새로고침</button>
+            <div class="control-group">
+                <button class="btn btn-sync" id="syncBtn">🔄 동기화 (네이버 → 구글시트)</button>
+                <div class="last-synced" id="lastSynced"></div>
+            </div>
             <div class="loading" id="loading">
                 <div class="spinner"></div>
-                <span>주문 정보를 불러오는 중...</span>
+                <span>데이터 처리중...</span>
             </div>
         </div>
 

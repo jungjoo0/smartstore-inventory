@@ -1,24 +1,43 @@
 document.addEventListener('DOMContentLoaded', () => {
     loadOrders();
+    const syncBtn = document.getElementById('syncBtn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', () => loadOrders(true));
+    }
 });
 
-async function loadOrders() {
+async function loadOrders(isSync = false) {
     const loading = document.getElementById('loading');
     const orderList = document.getElementById('orderList');
-    // 버튼 Selector 수정 (기존 .btn 클래스 사용 가정, 없으면 무시)
+    // 버튼 Selector 수정
     const btn = document.querySelector('.btn-search') || document.querySelector('.btn');
+    const syncBtn = document.getElementById('syncBtn');
+    const lastSynced = document.getElementById('lastSynced');
 
     // 로딩 상태 표시
     loading.classList.add('active');
     if (btn) btn.disabled = true;
-    orderList.innerHTML = '';
+    if (syncBtn) syncBtn.disabled = true;
+
+    if (isSync) {
+        // 동기화 시 안내 메시지
+        orderList.innerHTML = '<div class="no-data">네이버와 동기화 중입니다...<br>(최근 3개월 조회로 인해 최대 1~2분 소요될 수 있습니다)</div>';
+    } else {
+        orderList.innerHTML = '';
+    }
 
     try {
-        const response = await fetch('/api/orders');
+        const url = isSync ? '/api/orders?sync=true' : '/api/orders';
+        const response = await fetch(url);
         const data = await response.json();
 
         if (response.ok) {
             renderOrders(data.orders);
+            if (data.message && lastSynced) {
+                lastSynced.textContent = data.message;
+                // 5초 후 메시지 사라짐
+                setTimeout(() => { lastSynced.textContent = ''; }, 5000);
+            }
         } else {
             throw new Error(data.error || '주문 정보를 불러오는데 실패했습니다.');
         }
@@ -27,8 +46,10 @@ async function loadOrders() {
     } finally {
         loading.classList.remove('active');
         if (btn) btn.disabled = false;
+        if (syncBtn) syncBtn.disabled = false;
     }
 }
+
 
 function renderOrders(orders) {
     const orderList = document.getElementById('orderList');

@@ -245,95 +245,100 @@ def get_product_list(access_token):
 
 
 # 주문 내역을 조회하는 함수입니다. (최근 24시간 변동 내역)
-def get_order_list(access_token):
-    if not access_token:
-        return []
-
-    # 최근 변경 주문 조회 API URL
-    url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/last-changed-statuses"
-    
+def get_order_list(access_token, days=1):
+    """
+    네이버 API를 통해 최근 N일간 변동된 주문 내역을 가져옵니다.
+    (기존 24시간 로직을 N일 루프로 확장하여 사용)
+    """
+    url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders"
     headers = {
         'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json'
     }
     
-    # 현재 시간에서 24시간 전 (ISO 8601 형식)
     import datetime
-    last_changed_from = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+    KST = datetime.timezone(datetime.timedelta(hours=9))
+    now = datetime.datetime.now(KST)
     
-    # 쿼리 파라미터
-    params = {
-        'lastChangedFrom': last_changed_from
-    }
-
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
+    all_orders = []
+    
+    # days만큼 하루씩 루프 (API 제한 준수)
+    for i in range(days):
+        end_time = now - datetime.timedelta(days=i)
+        start_time = end_time - datetime.timedelta(days=1)
         
-        data = response.json()
-        last_change_statuses = data.get('data', {}).get('lastChangeStatuses', [])
+        last_changed_from = start_time.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + '+09:00'
         
-        # 상품 주문 번호 리스트 추출
-        product_order_ids = [item['productOrderId'] for item in last_change_statuses]
+        # 1. 변경된 주문 ID 조회 (last-changed-statuses)
+        # 주의: 이 API는 24시간 제한이 있으므로 루프 필요
+        lc_url = f"{url}/last-changed-statuses"
+        lc_params = {'lastChangedFrom': last_changed_from}
         
-        if not product_order_ids:
-            return []
-
-        # 상품 주문 상세 조회 (최대 300개 제한이 있으므로, 필요시 루프 처리 필요하나 여기선 단순화)
-        # API: POST /external/v1/pay-order/seller/product-orders/query
-        query_url = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/query"
-        
-        payload = {
-            "productOrderIds": product_order_ids
-        }
-        
-        query_response = requests.post(query_url, headers=headers, json=payload)
-        query_response.raise_for_status()
-        
-        query_data = query_response.json()
-        product_orders = query_data.get('data', [])
-        
-        orders_info = []
-        for item in product_orders:
-            product_order = item.get('productOrder', {})
-            order_detail = item.get('order', {})
-            
-            # 필터링: 구매확정(PURCHASE_DECIDED) 제외 (사용자 요청 반영 유지)
-            status = product_order.get('productOrderStatus')
-            if status == 'PURCHASE_DECIDED':
+        try:
+            lc_resp = requests.get(lc_url, headers=headers, params=lc_params)
+            if lc_resp.status_code != 200:
                 continue
+                
+            lc_data = lc_resp.json()
+            product_order_ids = [
+                stat['productOrderId'] 
+                for stat in lc_data.get('data', {}).get('lastChangeStatuses', [])
+            ]
+            
+            if not product_order_ids:
+                continue
+                
+            # 2. 상세 내역 조회 (query) - 최대 300개씩 분할
+            chunk_size = 300
+            for k in range(0, len(product_order_ids), chunk_size):
+                chunk_ids = product_order_ids[k:k+chunk_size]
+                q_resp = requests.post(f"{url}/query", headers=headers, json={'productOrderIds': chunk_ids})
+                
+                if q_resp.status_code == 200:
+                    q_data = q_resp.json()
+                    all_orders.extend(q_data.get('data', []))
+                    
+        except Exception as e:
+            print(f"Naver API Error (Day {i}): {e}")
+            continue
 
-            shipping_address = product_order.get('shippingAddress', {})
+    # 데이터 가공 및 중복 제거
+    orders_info = []
+    processed_ids = set()
+    
+    for item in all_orders:
+        product_order = item.get('productOrder', {})
+        p_id = product_order.get('productOrderId')
+        
+        if not p_id or p_id in processed_ids:
+            continue
+        processed_ids.add(p_id)
+        
+        status = product_order.get('productOrderStatus')
+        if status == 'PURCHASE_DECIDED':
+            continue
             
-            # 구매자명: 배송지 수령인(name) 우선, 없으면 주문자명(ordererName)
-            buyer_name = shipping_address.get('name')
-            if not buyer_name:
-                buyer_name = order_detail.get('ordererName', 'N/A')
-            
-            # 주문일시
-            order_date = order_detail.get('orderDate')
-            if not order_date:
-                order_date = product_order.get('placeOrderDate')
-            
-            order_info = {
-                'order_date':  order_date if order_date else 'N/A',
-                'product_order_id': product_order.get('productOrderId'),
-                'order_id': order_detail.get('orderId', 'N/A'),
-                'product_name': product_order.get('productName'),
-                'product_option': product_order.get('productOption'),
-                'quantity': product_order.get('quantity'),
-                'buyer_name': buyer_name,
-                'status': status,
-            }
-            orders_info.append(order_info)
-            
-        # 최신순 정렬
-        orders_info.sort(key=lambda x: x['order_date'], reverse=True)
-        return orders_info
+        order_detail = item.get('order', {})
+        shipping_address = product_order.get('shippingAddress', {})
+        
+        buyer_name = shipping_address.get('name') or order_detail.get('ordererName', 'N/A')
+        order_date = order_detail.get('orderDate') or product_order.get('placeOrderDate')
+        
+        orders_info.append({
+            'order_date':  order_date if order_date else 'N/A',
+            'product_order_id': str(p_id),
+            'order_id': order_detail.get('orderId', 'N/A'),
+            'product_name': product_order.get('productName'),
+            'product_option': product_order.get('productOption'),
+            'quantity': product_order.get('quantity'),
+            'buyer_name': buyer_name,
+            'status': status,
+        })
+        
+    # 최신순 정렬
+    orders_info.sort(key=lambda x: x['order_date'], reverse=True)
+    return orders_info
 
-    except Exception as e:
-        print(f"주문 조회 오류: {e}")
-        return []
 
 
 
@@ -414,18 +419,70 @@ def api_products():
     return jsonify({'products': products})
 
 
+
+# Google Sheets 연동 모듈 임포트
+import google_sheets
+import traceback
+
 @app.route('/api/orders')
 @login_required
 def api_orders():
-    """주문 목록 API"""
+    """
+    주문 내역을 JSON으로 반환합니다.
+    - 기본: 구글 시트에서 데이터 조회 (고속, 무제한)
+    - sync=true 파라미터: 네이버 API에서 최근 데이터 가져와 시트 동기화
+    """
     load_dotenv()
     access_token = token()
     
     if not access_token:
-        return jsonify({'error': '토큰 발급 실패'}), 500
-    
-    orders = get_order_list(access_token)
-    return jsonify({'orders': orders})
+        return jsonify({'error': '네이버 커머스 API 토큰 발급 실패. 잠시 후 다시 시도해주세요.'}), 500
+
+    sync_requested = request.args.get('sync') == 'true'
+
+    if sync_requested:
+        # [동기화 모드] 네이버 API -> 구글 시트 업데이트
+        try:
+            # 1. 네이버에서 최근 변동 내역 조회 (최근 3개월)
+            days = 90
+            naver_orders = get_order_list(access_token, days=days) 
+            
+            # 2. 구글 시트 동기화
+            result = google_sheets.sync_orders_to_sheet(naver_orders)
+            
+            if result.get('status') == 'error':
+                 return jsonify({'error': f"구글 시트 동기화 실패: {result.get('message')}"}), 500
+            
+            # 3. 동기화 완료 후 최신 데이터 반환
+            all_orders = google_sheets.get_orders_from_sheet()
+            return jsonify({
+                'orders': all_orders,
+                'message': f"동기화 완료! (최근 {days}일 조회, 추가: {result.get('added')}건, 업데이트: {result.get('updated')}건)"
+            })
+            
+        except Exception as e:
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
+            
+    else:
+        # [조회 모드] 구글 시트에서 바로 읽기 (빠름)
+        try:
+            all_orders = google_sheets.get_orders_from_sheet()
+            
+            # 시트가 비어있거나 연결이 안된 경우 (첫 실행 등) -> 네이버에서 가져옴 (최근 24시간)
+            # 하지만 사용자 경험을 위해 시트가 비었으면 "동기화 버튼을 눌러주세요" 처럼 빈 배열 보냄
+            # 혹은 자동 초기화 (여기선 자동 초기화 시도)
+            if not all_orders:
+                 naver_orders = get_order_list(access_token, days=3)
+                 if naver_orders:
+                    google_sheets.sync_orders_to_sheet(naver_orders)
+                    all_orders = google_sheets.get_orders_from_sheet()
+
+            return jsonify({'orders': all_orders})
+            
+        except Exception as e:
+            traceback.print_exc()
+            return jsonify({'error': f"구글 시트 조회 실패: {str(e)}"}), 500
 
 
 # 메인 실행 블록
