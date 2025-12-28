@@ -39,7 +39,9 @@ async function loadOrders(isSync = false) {
                     progressEl.innerHTML = `네이버와 동기화 중입니다...<br>구간: ${offset}~${Math.min(offset + chunkSize, totalDays)}일 전<br>진행률: ${progress}%`;
                 }
 
-                const url = `/api/orders?sync=true&days=${chunkSize}&offset=${offset}`;
+                // 첫 번째 청크(가장 최신 데이터)일 때만 'clear=true'를 보내서 기존 시트 내용을 지움
+                const clearParam = (i === 0) ? '&clear=true' : '';
+                const url = `/api/orders?sync=true&days=${chunkSize}&offset=${offset}${clearParam}`;
                 const response = await fetch(url);
 
                 if (!response.ok) {

@@ -47,9 +47,10 @@ def get_or_create_worksheet(client, spreadsheet_name="SmartStore_Orders"):
         print(f"Worksheet Error: {e}")
         return None
 
-def sync_orders_to_sheet(new_orders):
+def sync_orders_to_sheet(new_orders, clear_sheet=False):
     """
     네이버에서 가져온 주문 데이터를 구글 시트에 동기화합니다.
+    - clear_sheet=True: 기존 시트 내용을 모두 지우고 새로 씁니다.
     - 기존 주문 ID가 있으면 상태를 업데이트
     - 새로운 주문이면 추가
     **API 제한(60회/분)을 피하기 위해 배치 처리(Batch Processing)를 사용합니다.**
@@ -61,6 +62,14 @@ def sync_orders_to_sheet(new_orders):
     worksheet = get_or_create_worksheet(client)
     if not worksheet:
         return {"status": "error", "message": "스프레드시트를 찾을 수 없습니다. 'SmartStore_Orders' 이름의 시트를 만들고 공유했는지 확인해주세요."}
+
+    # [초기화 요청 처리]
+    if clear_sheet:
+        try:
+            worksheet.clear()
+            worksheet.append_row(["order_date", "product_order_id", "order_id", "product_name", "product_option", "quantity", "buyer_name", "status"])
+        except Exception as e:
+            return {"status": "error", "message": f"시트 초기화 실패: {str(e)}"}
 
     # 현재 시트 데이터 가져오기
     try:

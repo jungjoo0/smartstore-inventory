@@ -451,12 +451,13 @@ def api_orders():
             # 1. 파라미터 확인 (Client-side Chunking 지원)
             days = int(request.args.get('days', 3))
             offset = int(request.args.get('offset', 0))
+            should_clear = request.args.get('clear') == 'true'
             
             # 2. 네이버 조회
             naver_orders = get_order_list(access_token, days=days, offset=offset) 
             
             # 2. 구글 시트 동기화
-            result = google_sheets.sync_orders_to_sheet(naver_orders)
+            result = google_sheets.sync_orders_to_sheet(naver_orders, clear_sheet=should_clear)
             
             if result.get('status') == 'error':
                  return jsonify({'error': f"구글 시트 동기화 실패: {result.get('message')}"}), 500
