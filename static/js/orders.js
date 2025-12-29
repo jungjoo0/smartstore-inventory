@@ -11,7 +11,7 @@ const STATUS_MAP = {
     'EXCHANGED': '교환',
     'CANCELED': '취소',
     'RETURNED': '반품',
-    'CANCELED_BY_NO_PAYMENT': '미입금취소',
+    'CANCELED_BY_NOPAYMENT': '미입금취소',
     'PRODUCT_PREPARE': '상품준비중',
     'DELIVERY_PREPARE': '배송준비중'
 };
