@@ -296,7 +296,7 @@ function renderOrders(orders) {
                     <td></td> <!-- 날짜 공란 -->
                     <td>${item.product_order_id}</td> <!-- 품목주문번호 -->
                     <td><span class="status-badge ${itemStatusClass}">${itemStatusText}</span></td>
-                    <td style="text-align: left; padding-left: 10px;">
+                    <td style="text-align: center;">
                         <div style="font-weight: 500;">${item.product_name}</div>
                         <div class="text-muted" style="font-size: 0.85rem; margin-top: 2px;">${item.product_option || '옵션 없음'}</div>
                     </td>
