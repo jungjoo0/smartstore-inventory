@@ -250,17 +250,18 @@ function renderOrders(orders) {
         tr.className = 'order-group-header';
         tr.onclick = () => toggleDetails(orderId);
 
-        // 상품명 요약
+        // 상품명 요약: 대표 행에서는 옵션을 제외하고 상품명만 표시
         let productSummary = firstOrder.product_name;
-        if (firstOrder.product_option) {
-            productSummary += ` [${firstOrder.product_option}]`;
-        }
         if (isMulti) {
             productSummary += ` 외 ${group.length - 1}건`;
         }
 
         tr.innerHTML = `
-            <td>${isMulti ? '<span class="toggle-icon">▼</span>' : ''}</td>
+            <td>
+                <div class="toggle-container">
+                    <span class="toggle-icon"></span>
+                </div>
+            </td>
             <td>${formatDate(firstOrder.order_date)}</td>
             <td>${orderId}</td>
             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
@@ -291,11 +292,14 @@ function renderOrders(orders) {
 
             detailsHtml += `
                 <tr>
-                    <td style="color: #cbd5e1;">└</td>
+                    <td style="color: #cbd5e1; text-align: center;">└</td>
                     <td></td> <!-- 날짜 공란 -->
                     <td>${item.product_order_id}</td> <!-- 품목주문번호 -->
                     <td><span class="status-badge ${itemStatusClass}">${itemStatusText}</span></td>
-                    <td style="text-align: left;">${item.product_name} <br> <small class="text-muted">${item.product_option || ''}</small></td>
+                    <td style="text-align: left; padding-left: 10px;">
+                        <div style="font-weight: 500;">${item.product_name}</div>
+                        <div class="text-muted" style="font-size: 0.85rem; margin-top: 2px;">${item.product_option || '옵션 없음'}</div>
+                    </td>
                     <td>${item.quantity}</td>
                     <td></td> <!-- 구매자 공란 -->
                 </tr>
@@ -321,11 +325,14 @@ function toggleDetails(orderId) {
         const isHidden = detailRow.style.display === 'none';
         detailRow.style.display = isHidden ? 'table-row' : 'none';
 
-        // 아이콘 회전
+        // 헤더 행에 'expanded' 클래스 토글 (CSS 애니메이션용)
         const headerRow = detailRow.previousElementSibling;
-        const icon = headerRow.querySelector('.toggle-icon');
-        if (icon) {
-            icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        if (headerRow) {
+            if (isHidden) {
+                headerRow.classList.add('expanded');
+            } else {
+                headerRow.classList.remove('expanded');
+            }
         }
     }
 }
