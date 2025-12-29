@@ -1,30 +1,43 @@
+// 전역 변수로 데이터 저장
+let allOrders = [];
+
 document.addEventListener('DOMContentLoaded', () => {
     loadOrders();
+
+    // 동기화 버튼 이벤트
     const syncBtn = document.getElementById('syncBtn');
     if (syncBtn) {
         syncBtn.addEventListener('click', () => loadOrders(true));
     }
+
+    // 필터 이벤트 리스너
+    const statusFilter = document.getElementById('statusFilter');
+    const searchInput = document.getElementById('searchInput');
+
+    if (statusFilter) statusFilter.addEventListener('change', filterOrders);
+    if (searchInput) searchInput.addEventListener('keyup', filterOrders);
 });
 
 async function loadOrders(isSync = false) {
     const loading = document.getElementById('loading');
     const orderList = document.getElementById('orderList');
-    const btn = document.querySelector('.btn-search') || document.querySelector('.btn');
+    // 버튼 Selector
     const syncBtn = document.getElementById('syncBtn');
     const lastSynced = document.getElementById('lastSynced');
 
     loading.classList.add('active');
-    if (btn) btn.disabled = true;
     if (syncBtn) syncBtn.disabled = true;
 
     if (isSync) {
         orderList.innerHTML = '<div class="no-data" id="syncProgress">네이버와 동기화 중입니다...<br>진행률: 0%</div>';
     } else {
+        // 동기화 아닐 땐 일단 비워두고 로딩 완료 후 렌더링
         orderList.innerHTML = '';
     }
 
     try {
         if (isSync) {
+            // [동기화 로직]
             // 90일치를 5일 단위로 끊어서 요청 (총 18회)
             const totalDays = 90;
             const chunkSize = 5;
@@ -58,17 +71,19 @@ async function loadOrders(isSync = false) {
                 setTimeout(() => { lastSynced.textContent = ''; }, 5000);
             }
 
-            // 완료 후 전체 데이터 다시 로드 (DB 조회)
+            // 동기화 완료 후 일반 데이터 로드 재호출
             await loadOrders(false);
             return;
 
         } else {
-            // [일반 조회] 구글시트 DB 조회
+            // [일반 조회 로직] 구글시트 또는 DB 조회
             const response = await fetch('/api/orders');
             const data = await response.json();
 
             if (response.ok) {
-                renderOrders(data.orders);
+                allOrders = data.orders; // 전역 변수 저장
+                updateStatusFilter(allOrders); // 상태 옵션 갱신
+                filterOrders(); // 초기 필터링 및 렌더링
             } else {
                 throw new Error(data.error || '주문 정보를 불러오는데 실패했습니다.');
             }
@@ -79,162 +94,213 @@ async function loadOrders(isSync = false) {
     } finally {
         if (!isSync) {
             loading.classList.remove('active');
-            if (btn) btn.disabled = false;
             if (syncBtn) syncBtn.disabled = false;
         }
     }
 }
 
+// 상태 필터 옵션 동적 생성
+function updateStatusFilter(orders) {
+    const statusFilter = document.getElementById('statusFilter');
+    if (!statusFilter) return;
+
+    // 현재 선택된 값 유지
+    const currentValue = statusFilter.value;
+
+    // 유니크한 상태 값 추출 (null/undefined 제외)
+    // 구글 시트 데이터는 딕셔너리 리스트이므로 status 키 사용
+    const statuses = [...new Set(orders.map(o => o.status))].filter(s => s).sort();
+
+    // 옵션 초기화 (전체 상태 포함)
+    statusFilter.innerHTML = '<option value="">전체 상태</option>';
+
+    statuses.forEach(status => {
+        const option = document.createElement('option');
+        option.value = status;
+        option.textContent = status;
+        statusFilter.appendChild(option);
+    });
+
+    // 값 복원 (만약 이전 선택값이 새 목록에 없으면 '전체'가 됨)
+    if (currentValue && statuses.includes(currentValue)) {
+        statusFilter.value = currentValue;
+    }
+}
+
+// 필터링 및 렌더링 호출
+function filterOrders() {
+    const statusFilter = document.getElementById('statusFilter');
+    const searchInput = document.getElementById('searchInput');
+
+    const statusValue = statusFilter ? statusFilter.value : '';
+    const searchValue = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    const filtered = allOrders.filter(order => {
+        // 1. 상태 필터
+        if (statusValue && order.status !== statusValue) return false;
+
+        // 2. 검색어 필터 (주문번호, 구매자명, 상품명, 옵션)
+        // 데이터가 문자열이 아닐 수도 있으므로 String() 변환 필수
+        if (searchValue) {
+            const searchTargets = [
+                order.product_order_id,
+                order.order_id,
+                order.buyer_name,
+                order.product_name,
+                order.product_option
+            ].map(s => String(s || '').toLowerCase());
+
+            return searchTargets.some(t => t.includes(searchValue));
+        }
+
+        return true;
+    });
+
+    renderOrders(filtered);
+}
 
 function renderOrders(orders) {
     const orderList = document.getElementById('orderList');
+    orderList.innerHTML = '';
 
     if (!orders || orders.length === 0) {
-        orderList.innerHTML = '<div class="no-data">최근 24시간 내 변동된 주문 내역이 없습니다.</div>';
+        orderList.innerHTML = '<div class="no-data">검색 결과가 없습니다.</div>';
         return;
     }
 
-    // 주문 번호 기준으로 그룹화
-    const groups = {};
+    // 주문번호(order_id) 기준으로 그룹화
+    const groupedOrders = {};
     orders.forEach(order => {
-        const orderId = order.order_id || 'unknown';
-        if (!groups[orderId]) {
-            groups[orderId] = [];
+        if (!groupedOrders[order.order_id]) {
+            groupedOrders[order.order_id] = [];
         }
-        groups[orderId].push(order);
+        groupedOrders[order.order_id].push(order);
     });
 
-    let html = `
-        <div class="table-responsive">
-            <table class="order-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50px;"></th>
-                        <th>주문일시</th>
-                        <th>주문번호</th>
-                        <th>상태</th>
-                        <th>상품명 / 옵션</th>
-                        <th>수량</th>
-                        <th>구매자</th>
-                    </tr>
-                </thead>
-                <tbody>
+    const table = document.createElement('table');
+    table.className = 'order-table';
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th></th>
+                <th>주문일시</th>
+                <th>주문번호</th>
+                <th>상태</th>
+                <th>상품명 / 옵션</th>
+                <th>수량</th>
+                <th>구매자</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
     `;
 
-    // 그룹별 렌더링
-    Object.keys(groups).forEach(orderId => {
-        const groupOrders = groups[orderId];
-        const firstOrder = groupOrders[0]; // 대표 정보 (첫 번째 주문 기준)
-        const rowId = `row-${orderId}`;
-        const detailRowId = `detail-${orderId}`;
-        const itemCount = groupOrders.length;
+    const tbody = table.querySelector('tbody');
 
-        // 날짜 포맷팅
-        let dateStr = '-';
-        if (firstOrder.order_date && firstOrder.order_date !== 'N/A') {
-            try {
-                dateStr = new Date(firstOrder.order_date).toLocaleString('ko-KR', {
-                    month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                });
-            } catch (e) {
-                dateStr = firstOrder.order_date;
-            }
+    // 최신 주문(주문번호가 큰 것)이 위로 오도록 정렬
+    const sortedOrderIds = Object.keys(groupedOrders).sort((a, b) => b.localeCompare(a));
+
+    sortedOrderIds.forEach(orderId => {
+        const group = groupedOrders[orderId];
+        const firstOrder = group[0];
+        const isMulti = group.length > 1;
+        const totalQty = group.reduce((sum, item) => sum + parseInt(item.quantity || 0), 0);
+
+        // 대표 상태 (첫 번째 상품 기준)
+        const mainStatus = firstOrder.status;
+        const statusClass = getStatusClass(mainStatus);
+
+        // 그룹 헤더 행
+        const tr = document.createElement('tr');
+        tr.className = 'order-group-header';
+        tr.onclick = () => toggleDetails(orderId);
+
+        // 상품명 요약
+        let productSummary = firstOrder.product_name;
+        if (firstOrder.product_option) {
+            productSummary += ` [${firstOrder.product_option}]`;
+        }
+        if (isMulti) {
+            productSummary += ` 외 ${group.length - 1}건`;
         }
 
-        // 상태 한글 변환 함수
-        const getStatusText = (status) => {
-            const statusMap = {
-                'PAYED': '결제완료',
-                'DISPATCHED': '발송중',
-                'DELIVERING': '배송중',
-                'DELIVERED': '배송완료',
-                'PURCHASE_DECIDED': '구매확정',
-                'EXCHANGED': '교환',
-                'CANCELED': '취소',
-                'RETURNED': '반품',
-                'REFUNDED': '환불'
-            };
-            return statusMap[status] || status;
-        };
+        tr.innerHTML = `
+            <td>${isMulti ? '<span class="toggle-icon">▼</span>' : ''}</td>
+            <td>${formatDate(firstOrder.order_date)}</td>
+            <td>${orderId}</td>
+            <td><span class="status-badge ${statusClass}">${mainStatus}</span></td>
+            <td>${productSummary}</td>
+            <td>${totalQty}</td>
+            <td>${firstOrder.buyer_name}</td>
+        `;
+        tbody.appendChild(tr);
 
-        const getStatusClass = (status) => {
-            if (status === 'PAYED') return 'status-payed';
-            if (status === 'DISPATCHED' || status === 'DELIVERING') return 'status-dispatched';
-            if (status === 'CANCELED' || status === 'RETURNED') return 'status-canceled';
-            return 'status-default';
-        };
+        // 상세 내용 행 (항상 생성하되 display: none)
+        const trDetail = document.createElement('tr');
+        trDetail.className = 'order-group-details';
+        trDetail.id = `details-${orderId}`;
+        trDetail.style.display = 'none';
 
-        // 대표 상품명 생성 (예: "A상품 외 2건")
-        let summaryProductName = firstOrder.product_name;
-        if (itemCount > 1) {
-            summaryProductName += ` 외 ${itemCount - 1}건`;
-        }
-
-        // 요약 행 (클릭 시 상세 펼침)
-        html += `
-            <tr class="order-group-header" onclick="toggleDetails('${orderId}')">
-                <td class="toggle-icon" id="icon-${orderId}">▼</td>
-                <td class="order-date">${dateStr}</td>
-                <td class="order-id">${orderId}</td>
-                <td><span class="status-badge ${getStatusClass(firstOrder.status)}">${getStatusText(firstOrder.status)}</span></td>
-                <td class="product-info-cell">
-                    <div class="order-product-name">${summaryProductName}</div>
-                </td>
-                <td class="order-quantity">${itemCount}종</td>
-                <td class="buyer-name">${firstOrder.buyer_name}</td>
-            </tr>
-            <tr id="${detailRowId}" class="order-group-details" style="display: none;">
-                <td colspan="7">
-                    <div class="detail-container">
-                        <table class="detail-table">
+        let detailsHtml = `
+            <td colspan="7">
+                <div class="detail-container">
+                    <table class="detail-table">
+                        <tbody>
         `;
 
-        // 상세 주문 내역 행들
-        // 부모 테이블의 컬럼 구조: [Icon] [Date] [ID] [Status] [Product] [Qty] [Buyer]
-        // 내부 테이블도 동일한 7개 컬럼을 유지해야 CSS table-layout: fixed가 제대로 동작함
-        groupOrders.forEach(order => {
-            html += `
-                 <tr>
-                    <td></td> <!-- Icon Column -->
-                    <td></td> <!-- Date Column -->
-                    <td></td> <!-- ID Column -->
-                    <td><span class="status-badge ${getStatusClass(order.status)}">${getStatusText(order.status)}</span></td>
-                    <td class="product-info-cell">
-                        <div class="order-product-name">${order.product_name}</div>
-                        <div class="order-option">${order.product_option || '-'}</div>
-                    </td>
-                    <td class="order-quantity">${order.quantity}개</td>
-                    <td></td> <!-- Buyer Column -->
-                 </tr>
-             `;
+        group.forEach(item => {
+            const itemStatusClass = getStatusClass(item.status);
+            detailsHtml += `
+                <tr>
+                    <td>-</td>
+                    <td></td> <!-- 날짜 공란 -->
+                    <td>${item.product_order_id}</td> <!-- 품목주문번호 -->
+                    <td><span class="status-badge ${itemStatusClass}">${item.status}</span></td>
+                    <td>${item.product_name} <br> <small class="text-muted">${item.product_option || ''}</small></td>
+                    <td>${item.quantity}</td>
+                    <td></td> <!-- 구매자 공란 -->
+                </tr>
+            `;
         });
 
-        html += `
-                        </table>
-                    </div>
-                </td>
-            </tr>
+        detailsHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            </td>
         `;
+        trDetail.innerHTML = detailsHtml;
+        tbody.appendChild(trDetail);
     });
 
-    html += `
-                </tbody>
-            </table>
-        </div>
-    `;
-
-    orderList.innerHTML = html;
+    orderList.appendChild(table);
 }
 
 function toggleDetails(orderId) {
-    const detailRow = document.getElementById(`detail-${orderId}`);
-    const icon = document.getElementById(`icon-${orderId}`);
-
-    if (detailRow.style.display === 'none') {
-        detailRow.style.display = 'table-row';
-        icon.textContent = '▲';
-    } else {
-        detailRow.style.display = 'none';
-        icon.textContent = '▼';
+    const detailRow = document.getElementById(`details-${orderId}`);
+    if (detailRow) {
+        detailRow.style.display = detailRow.style.display === 'none' ? 'table-row' : 'none';
     }
+}
+
+function formatDate(dateString) {
+    if (!dateString) return '';
+    try {
+        const date = new Date(dateString);
+        const yy = String(date.getFullYear()).slice(-2);
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        const hh = String(date.getHours()).padStart(2, '0');
+        const min = String(date.getMinutes()).padStart(2, '0');
+        return `${yy}-${mm}-${dd} ${hh}:${min}`;
+    } catch (e) {
+        return dateString;
+    }
+}
+
+function getStatusClass(status) {
+    if (!status) return 'status-default';
+    if (status === 'PAYED' || status === 'PAYMENT_WAITING') return 'status-payed';
+    if (status === 'Delivering' || status === 'DELIVERED') return 'status-dispatched';
+    if (status === 'CANCELED') return 'status-canceled';
+    return 'status-default';
 }
