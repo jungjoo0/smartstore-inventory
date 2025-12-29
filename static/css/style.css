@@ -612,7 +612,7 @@ h1 {
 }
 
 .detail-table td:nth-child(4) {
-    width: 100px;
+    width: 200px;
 }
 
 .detail-table td:nth-child(5) {
@@ -662,3 +662,4 @@ h1 {
 .btn-sync:hover { background-color: #059669; }
 .control-group { display: flex; align-items: center; gap: 1rem; }
 .last-synced { font-size: 0.85rem; color: var(--text-muted); }
+
