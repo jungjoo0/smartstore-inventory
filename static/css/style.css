@@ -469,35 +469,20 @@ h1 {
 .order-table {
     width: 100%;
     table-layout: fixed;
-    /* Fixed layout for consistent widths */
     border-collapse: collapse;
     font-size: 0.9rem;
-    min-width: 1000px;
-    /* Force minimum width to prevent squeezing */
+    min-width: 1200px;
+    /* 열이 많으므로 최소 너비 확보 */
 }
 
-/* Define Column Widths using nth-child */
-.order-table th:nth-child(1),
-.order-table td:nth-child(1) {
-    width: 50px;
-}
-
-/* Icon */
-.order-table th:nth-child(2),
-.order-table td:nth-child(2) {
-    width: 150px;
-}
-
-/* Date */
-.order-table th:nth-child(3),
-.order-table td:nth-child(3) {
-    width: 140px;
-}
-
-/* Order ID */
-.order-table th:nth-child(4),
-.order-table td:nth-child(4) {
-    width: 100px;
+/* colgroup을 사용하여 orders.js에서 제어하므로 th, td 스타일만 정비 */
+.order-table th,
+.order-table td {
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Status */
@@ -617,33 +602,13 @@ h1 {
     border-collapse: collapse;
 }
 
-/* Match Parent Column Widths */
-.detail-table td:nth-child(1) {
-    width: 50px;
-}
-
-.detail-table td:nth-child(2) {
-    width: 150px;
-}
-
-.detail-table td:nth-child(3) {
-    width: 140px;
-}
-
-.detail-table td:nth-child(4) {
-    width: 200px;
-}
-
-.detail-table td:nth-child(5) {
-    width: auto;
-}
-
-.detail-table td:nth-child(6) {
-    width: 80px;
-}
-
-.detail-table td:nth-child(7) {
-    width: 120px;
+/* Detail table specific adjustments */
+.detail-table td {
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    text-align: center;
+    background-color: #fafafa;
+    /* 상세 행은 약간 다르게 */
 }
 
 .detail-table td {

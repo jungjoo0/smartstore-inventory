@@ -1,6 +1,26 @@
 // 전역 변수로 데이터 저장
 let allOrders = [];
 
+// 상태 한글 매핑
+const STATUS_MAP = {
+    'PAYMENT_WAITING': '입금대기',
+    'PAYED': '결제완료',
+    'DELIVERING': '배송중',
+    'DELIVERED': '배송완료',
+    'PURCHASE_DECIDED': '구매확정',
+    'EXCHANGED': '교환',
+    'CANCELED': '취소',
+    'RETURNED': '반품',
+    'CANCELED_BY_NO_PAYMENT': '미입금취소',
+    'PRODUCT_PREPARE': '상품준비중',
+    'DELIVERY_PREPARE': '배송준비중'
+};
+
+function getKoreanStatus(status) {
+    if (!status) return '';
+    return STATUS_MAP[status] || status;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     loadOrders();
 
@@ -117,7 +137,7 @@ function updateStatusFilter(orders) {
     statuses.forEach(status => {
         const option = document.createElement('option');
         option.value = status;
-        option.textContent = status;
+        option.textContent = getKoreanStatus(status); // 한글 표기 적용
         statusFilter.appendChild(option);
     });
 
@@ -179,7 +199,22 @@ function renderOrders(orders) {
 
     const table = document.createElement('table');
     table.className = 'order-table';
+
+    // [UI 개선] colgroup으로 열 너비 고정
+    const colgroup = `
+        <colgroup>
+            <col style="width: 50px;">
+            <col style="width: 140px;">
+            <col style="width: 220px;">
+            <col style="width: 110px;">
+            <col style="width: auto;">
+            <col style="width: 70px;">
+            <col style="width: 130px;">
+        </colgroup>
+    `;
+
     table.innerHTML = `
+        ${colgroup}
         <thead>
             <tr>
                 <th></th>
@@ -196,7 +231,7 @@ function renderOrders(orders) {
 
     const tbody = table.querySelector('tbody');
 
-    // 최신 주문(주문번호가 큰 것)이 위로 오도록 정렬
+    // 최신 주문 역순 정렬
     const sortedOrderIds = Object.keys(groupedOrders).sort((a, b) => b.localeCompare(a));
 
     sortedOrderIds.forEach(orderId => {
@@ -208,6 +243,7 @@ function renderOrders(orders) {
         // 대표 상태 (첫 번째 상품 기준)
         const mainStatus = firstOrder.status;
         const statusClass = getStatusClass(mainStatus);
+        const statusText = getKoreanStatus(mainStatus);
 
         // 그룹 헤더 행
         const tr = document.createElement('tr');
@@ -227,7 +263,7 @@ function renderOrders(orders) {
             <td>${isMulti ? '<span class="toggle-icon">▼</span>' : ''}</td>
             <td>${formatDate(firstOrder.order_date)}</td>
             <td>${orderId}</td>
-            <td><span class="status-badge ${statusClass}">${mainStatus}</span></td>
+            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
             <td>${productSummary}</td>
             <td>${totalQty}</td>
             <td>${firstOrder.buyer_name}</td>
@@ -240,22 +276,26 @@ function renderOrders(orders) {
         trDetail.id = `details-${orderId}`;
         trDetail.style.display = 'none';
 
+        // 상세 테이블도 동일한 colgroup 구조를 써서 열 정렬 맞춤
         let detailsHtml = `
-            <td colspan="7">
+            <td colspan="7" style="padding: 0;">
                 <div class="detail-container">
-                    <table class="detail-table">
+                    <table class="detail-table" style="width: 100%; table-layout: fixed; margin: 0;">
+                        ${colgroup}
                         <tbody>
         `;
 
         group.forEach(item => {
             const itemStatusClass = getStatusClass(item.status);
+            const itemStatusText = getKoreanStatus(item.status);
+
             detailsHtml += `
                 <tr>
-                    <td>-</td>
+                    <td style="color: #cbd5e1;">└</td>
                     <td></td> <!-- 날짜 공란 -->
                     <td>${item.product_order_id}</td> <!-- 품목주문번호 -->
-                    <td><span class="status-badge ${itemStatusClass}">${item.status}</span></td>
-                    <td>${item.product_name} <br> <small class="text-muted">${item.product_option || ''}</small></td>
+                    <td><span class="status-badge ${itemStatusClass}">${itemStatusText}</span></td>
+                    <td style="text-align: left;">${item.product_name} <br> <small class="text-muted">${item.product_option || ''}</small></td>
                     <td>${item.quantity}</td>
                     <td></td> <!-- 구매자 공란 -->
                 </tr>
@@ -278,7 +318,15 @@ function renderOrders(orders) {
 function toggleDetails(orderId) {
     const detailRow = document.getElementById(`details-${orderId}`);
     if (detailRow) {
-        detailRow.style.display = detailRow.style.display === 'none' ? 'table-row' : 'none';
+        const isHidden = detailRow.style.display === 'none';
+        detailRow.style.display = isHidden ? 'table-row' : 'none';
+
+        // 아이콘 회전
+        const headerRow = detailRow.previousElementSibling;
+        const icon = headerRow.querySelector('.toggle-icon');
+        if (icon) {
+            icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
     }
 }
 
@@ -299,8 +347,9 @@ function formatDate(dateString) {
 
 function getStatusClass(status) {
     if (!status) return 'status-default';
-    if (status === 'PAYED' || status === 'PAYMENT_WAITING') return 'status-payed';
-    if (status === 'Delivering' || status === 'DELIVERED') return 'status-dispatched';
-    if (status === 'CANCELED') return 'status-canceled';
+    const s = String(status).toUpperCase();
+    if (s.includes('PAYED') || s.includes('PAYMENT') || s.includes('PREPARE')) return 'status-payed';
+    if (s.includes('DELIVER')) return 'status-dispatched';
+    if (s.includes('CANCEL') || s.includes('RETURN') || s.includes('EXCHANGE')) return 'status-canceled';
     return 'status-default';
 }
