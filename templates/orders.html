@@ -28,6 +28,13 @@
         </header>
 
         <div class="controls">
+            <div class="filter-group">
+                <select id="statusFilter" class="form-select">
+                    <option value="">전체 상태</option>
+                </select>
+                <input type="text" id="searchInput" class="form-input" placeholder="주문번호, 구매자명, 상품명 검색">
+            </div>
+
             <div class="control-group">
                 <button class="btn btn-sync" id="syncBtn">🔄 동기화 (네이버 → 구글시트)</button>
                 <div class="last-synced" id="lastSynced"></div>

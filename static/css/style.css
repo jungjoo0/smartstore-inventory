@@ -60,7 +60,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 100%;
     margin: 0 auto;
 }
 
@@ -657,9 +657,23 @@ h1 {
         overflow-x: auto;
     }
 }
-/* Sync Button Style */
-.btn-sync { background-color: #10b981; }
-.btn-sync:hover { background-color: #059669; }
-.control-group { display: flex; align-items: center; gap: 1rem; }
-.last-synced { font-size: 0.85rem; color: var(--text-muted); }
 
+/* Sync Button Style */
+.btn-sync {
+    background-color: #10b981;
+}
+
+.btn-sync:hover {
+    background-color: #059669;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.last-synced {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
