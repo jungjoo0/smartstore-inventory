@@ -425,9 +425,15 @@ def api_products():
 
 
 
-# Google Sheets 연동 모듈 임포트
-import google_sheets
-import traceback
+# 메모리 캐시 설정 (전역 변수)
+# 5분(300초) 단위로 최근 주문을 캐싱하여 API 호출 제한 방지
+ORDER_CACHE = {
+    'data': [],
+    'last_updated': 0
+}
+CACHE_DURATION_SECONDS = 300
+
+@app.route('/api/orders')
 
 @app.route('/api/orders')
 @login_required
@@ -444,54 +450,40 @@ def api_orders():
         return jsonify({'error': '네이버 커머스 API 토큰 발급 실패. 잠시 후 다시 시도해주세요.'}), 500
 
     sync_requested = request.args.get('sync') == 'true'
-
-    if sync_requested:
-        # [동기화 모드] 네이버 API -> 구글 시트 업데이트
+    current_time = time.time()
+    
+    # 1. 강제 동기화 요청이거나, 캐시 만료, 혹은 데이터가 없는 경우 API 재호출
+    if sync_requested or (current_time - ORDER_CACHE['last_updated'] > CACHE_DURATION_SECONDS) or not ORDER_CACHE['data']:
         try:
-            # 1. 파라미터 확인 (Client-side Chunking 지원)
+            # 최근 3일 치 주문 가져오기 (필요 시 일수 조정)
             days = int(request.args.get('days', 3))
             offset = int(request.args.get('offset', 0))
-            should_clear = request.args.get('clear') == 'true'
             
-            # 2. 네이버 조회
-            naver_orders = get_order_list(access_token, days=days, offset=offset) 
+            naver_orders = get_order_list(access_token, days=days, offset=offset)
             
-            # 2. 구글 시트 동기화
-            result = google_sheets.sync_orders_to_sheet(naver_orders, clear_sheet=should_clear)
-            
-            if result.get('status') == 'error':
-                 return jsonify({'error': f"구글 시트 동기화 실패: {result.get('message')}"}), 500
-            
-            # 3. 동기화 완료 후 최신 데이터 반환
-            all_orders = google_sheets.get_orders_from_sheet()
+            # API에서 가져온 데이터를 캐시에 저장
+            if naver_orders is not None:
+                ORDER_CACHE['data'] = naver_orders
+                ORDER_CACHE['last_updated'] = current_time
+                
+            msg = f"네이버 API에서 최근 {days}일 데이터를 성공적으로 동기화했습니다." if sync_requested else "주문 데이터를 최신 상태로 캐싱했습니다."
             return jsonify({
-                'orders': all_orders,
-                'message': f"동기화 완료! (최근 {days}일 조회, 추가: {result.get('added')}건, 업데이트: {result.get('updated')}건)"
+                'orders': ORDER_CACHE['data'],
+                'message': msg
             })
             
         except Exception as e:
-            traceback.print_exc()
-            return jsonify({'error': str(e)}), 500
-            
+            # 예외 발생 시 에러 반환 (기존 캐시가 있다면 함께 보여주기 위함)
+            return jsonify({
+                'error': f"데이터 동기화 실패: {str(e)}", 
+                'orders': ORDER_CACHE['data']
+            }), 500
     else:
-        # [조회 모드] 구글 시트에서 바로 읽기 (빠름)
-        try:
-            all_orders = google_sheets.get_orders_from_sheet()
-            
-            # 시트가 비어있거나 연결이 안된 경우 (첫 실행 등) -> 네이버에서 가져옴 (최근 24시간)
-            # 하지만 사용자 경험을 위해 시트가 비었으면 "동기화 버튼을 눌러주세요" 처럼 빈 배열 보냄
-            # 혹은 자동 초기화 (여기선 자동 초기화 시도)
-            if not all_orders:
-                 naver_orders = get_order_list(access_token, days=3)
-                 if naver_orders:
-                    google_sheets.sync_orders_to_sheet(naver_orders)
-                    all_orders = google_sheets.get_orders_from_sheet()
-
-            return jsonify({'orders': all_orders})
-            
-        except Exception as e:
-            traceback.print_exc()
-            return jsonify({'error': f"구글 시트 조회 실패: {str(e)}"}), 500
+        # 2. 유효한 캐시가 있는 경우 그대로 반환 (가장 빠른 응답)
+        return jsonify({
+            'orders': ORDER_CACHE['data'],
+            'message': '서버 메모리(캐시)에 저장된 최근 주문 내역입니다.'
+        })
 
 
 # 메인 실행 블록
