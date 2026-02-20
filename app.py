@@ -434,8 +434,6 @@ ORDER_CACHE = {
 CACHE_DURATION_SECONDS = 300
 
 @app.route('/api/orders')
-
-@app.route('/api/orders')
 @login_required
 def api_orders():
     """
@@ -461,19 +459,36 @@ def api_orders():
             
             naver_orders = get_order_list(access_token, days=days, offset=offset)
             
-            # API에서 가져온 데이터를 캐시에 저장
+            # API에서 가져온 데이터를 캐시에 병합(누적/상태업데이트) 저장
             if naver_orders is not None:
-                ORDER_CACHE['data'] = naver_orders
+                if offset == 0 and sync_requested:
+                    # '새로고침(90일)' 버튼으로 첫 청크(0~15일) 요청 시에만 캐시 완전 초기화 후 새로 구축
+                    ORDER_CACHE['data'] = naver_orders
+                else:
+                    # 나머지 (3일치 자동 업데이트, 15~90일치 추가 청크)는 기존 캐시에 병합
+                    existing_map = {str(o.get('product_order_id')): i for i, o in enumerate(ORDER_CACHE['data'])}
+                    for order in naver_orders:
+                        p_id = str(order.get('product_order_id'))
+                        if p_id in existing_map:
+                            # 기존에 있는 주문이면 상태 등이 바뀌었을 수 있으므로 최신 데이터로 덮어씌움
+                            ORDER_CACHE['data'][existing_map[p_id]] = order
+                        else:
+                            ORDER_CACHE['data'].append(order)
+                    
+                # 다시 날짜순(최신순) 정렬 보장
+                ORDER_CACHE['data'].sort(key=lambda x: x['order_date'], reverse=True)
                 ORDER_CACHE['last_updated'] = current_time
                 
-            msg = f"네이버 API에서 최근 {days}일 데이터를 성공적으로 동기화했습니다." if sync_requested else "주문 데이터를 최신 상태로 캐싱했습니다."
+            msg = f"네이버 API에서 데이터를 동기화했습니다. ({days}일치, offset: {offset})" if sync_requested else "주문 데이터를 최신 상태로 캐싱했습니다."
             return jsonify({
-                'orders': ORDER_CACHE['data'],
+                'orders': ORDER_CACHE['data'], # 어떤 요청이든 항상 누적된 전체 풀 데이터를 반환
                 'message': msg
             })
             
         except Exception as e:
             # 예외 발생 시 에러 반환 (기존 캐시가 있다면 함께 보여주기 위함)
+            import traceback
+            traceback.print_exc()
             return jsonify({
                 'error': f"데이터 동기화 실패: {str(e)}", 
                 'orders': ORDER_CACHE['data']
