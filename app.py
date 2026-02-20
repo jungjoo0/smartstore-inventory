@@ -453,8 +453,8 @@ def api_orders():
     # 1. 강제 동기화 요청이거나, 캐시 만료, 혹은 데이터가 없는 경우 API 재호출
     if sync_requested or (current_time - ORDER_CACHE['last_updated'] > CACHE_DURATION_SECONDS) or not ORDER_CACHE['data']:
         try:
-            # 최근 30일 치 주문 가져오기 (필요 시 일수 조정)
-            days = int(request.args.get('days', 30))
+            # 최근 3일 치 주문 가져오기 (필요 시 일수 조정)
+            days = int(request.args.get('days', 3))
             offset = int(request.args.get('offset', 0))
             
             naver_orders = get_order_list(access_token, days=days, offset=offset)
