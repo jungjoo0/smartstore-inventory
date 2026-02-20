@@ -424,6 +424,8 @@ h1 {
     font-weight: 700;
     color: var(--primary-color);
     font-size: 1rem;
+    white-space: nowrap;
+    /* 금액과 '원' 줄바꿈 방지 */
 }
 
 .total-stock {
@@ -514,7 +516,7 @@ h1 {
         align-items: flex-start;
         gap: 1rem;
     }
-    
+
     .header-controls {
         width: 100%;
         justify-content: space-between;
@@ -541,7 +543,7 @@ h1 {
         flex-direction: column;
         align-items: flex-start;
     }
-    
+
     .btn-sync {
         width: 100%;
     }
