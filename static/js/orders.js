@@ -4,7 +4,7 @@ let allOrders = [];
 // 상태 한글 매핑
 const STATUS_MAP = {
     'PAYMENT_WAITING': '입금대기',
-    'PAYED': '결제완료',
+    'PAYED': '결제완료 (신규주문)',
     'DELIVERING': '배송중',
     'DELIVERED': '배송완료',
     'PURCHASE_DECIDED': '구매확정',
@@ -12,8 +12,8 @@ const STATUS_MAP = {
     'CANCELED': '취소',
     'RETURNED': '반품',
     'CANCELED_BY_NOPAYMENT': '미입금취소',
-    'PRODUCT_PREPARE': '상품준비중',
-    'DELIVERY_PREPARE': '배송준비중'
+    'PRODUCT_PREPARE': '발송대기 (상품준비중)',
+    'DELIVERY_PREPARE': '발송대기 (배송준비중)'
 };
 
 function getKoreanStatus(status) {
@@ -127,8 +127,8 @@ async function loadOrders(isSync = false) {
             return;
 
         } else {
-            // [캐시 우선 조회] 서버의 인메모리 캐시에서 가져오기
-            const response = await fetch('/api/orders');
+            // [캐시 우선 조회] 기본적으로 30일치를 한번에 가져오도록 수정 (발송대기 건 등 과거 데이터도 바로 보이게)
+            const response = await fetch('/api/orders?days=30');
             const data = await response.json();
 
             if (response.ok) {
