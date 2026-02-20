@@ -73,9 +73,11 @@ async function loadOrders(isSync = false) {
                     throw new Error(`동기화 중 오류 (구간 ${offset}): ${data.error || response.statusText}`);
                 }
 
-                // 받아온 데이터 누적
+                // 백엔드에서 누적된 전체 데이터를 반환하므로 바로 덮어씌움
                 if (data.orders) {
-                    accumulatedOrders = accumulatedOrders.concat(data.orders);
+                    allOrders = data.orders;
+                    updateStatusFilter(allOrders);
+                    filterOrders();
                 }
 
                 // API 한도 타격을 줄이기 위한 안전 딜레이
