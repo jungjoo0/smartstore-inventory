@@ -52,7 +52,8 @@ async function loadOrders(isSync = false) {
             const totalDays = 90;
             const chunkSize = 15;
             const iterations = Math.ceil(totalDays / chunkSize);
-            let accumulatedOrders = [];
+
+            // 기존 누적 부분은 백엔드 응답을 그대로 사용하므로 accumulatedOrders 변수는 삭제함
 
             for (let i = 0; i < iterations; i++) {
                 const offset = i * chunkSize;
@@ -83,58 +84,35 @@ async function loadOrders(isSync = false) {
                 }
             }
 
+            // 동기화 완료 시 최종 렌더링 (이미 루프에서 실시간으로 그렸지만 혹시 모를 누락 확인)
             if (lastSynced) {
                 lastSynced.textContent = '최근 90일 동기화 완료!';
                 setTimeout(() => { lastSynced.textContent = ''; }, 5000);
             }
-
-            // 프론트엔드 전역변수에 누적된 90일치 최신 데이터를 덮어씌우고 다시 그린다.
-            allOrders = accumulatedOrders;
-            updateStatusFilter(allOrders);
-            filterOrders();
             return;
-
-            for (let i = 0; i < iterations; i++) {
-                const offset = i * chunkSize;
-                const progress = Math.round((i / iterations) * 100);
-
-                const progressEl = document.getElementById('syncProgress');
-                if (progressEl) {
-                    progressEl.innerHTML = `네이버와 동기화 중입니다...<br>구간: ${offset}~${Math.min(offset + chunkSize, totalDays)}일 전<br>진행률: ${progress}%`;
-                }
-
-                // 첫 번째 청크(가장 최신 데이터)일 때만 'clear=true'를 보내서 기존 시트 내용을 지움
-                const clearParam = (i === 0) ? '&clear=true' : '';
-                const url = `/api/orders?sync=true&days=${chunkSize}&offset=${offset}${clearParam}`;
-                const response = await fetch(url);
-
-                if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(`동기화 중 오류 (구간 ${offset}): ${data.error || response.statusText}`);
-                }
-
-                // API 속도 제한 방지를 위한 안전 딜레이 (1.5초)
-                await new Promise(resolve => setTimeout(resolve, 1500));
-            }
-
-            if (lastSynced) {
-                lastSynced.textContent = '동기화 완료!';
-                setTimeout(() => { lastSynced.textContent = ''; }, 5000);
-            }
-
-            // 동기화 완료 후 일반 데이터 로드 재호출
-            await loadOrders(false);
-            return;
-
         } else {
-            // [캐시 우선 조회] 기본적으로 30일치를 한번에 가져오도록 수정 (발송대기 건 등 과거 데이터도 바로 보이게)
-            const response = await fetch('/api/orders?days=30');
+            // [캐시 우선 조회] 기본적으로 3일치 동기화 또는 기존 서버에 누적된 전체 캐시를 가져옴 (타임아웃 방지)
+            const response = await fetch('/api/orders');
             const data = await response.json();
 
             if (response.ok) {
-                allOrders = data.orders; // 전역 변수 저장
+                allOrders = data.orders; // 전역 변수 저장 (항상 전체 누적 캐시가 내려옴)
                 updateStatusFilter(allOrders); // 상태 옵션 갱신
                 filterOrders(); // 초기 필터링 및 렌더링
+
+                // 사용자가 요청한 "최근 90일치를 봐야해" 니즈를 충족하기 위해,
+                // 최초 1회 방문 시에는 502 타임아웃 없이 안전하게 15일 단위로 쪼개서 90일을 가져오는
+                // "동기화(isSync=true)" 프로세스를 백그라운드에서 자동 실행합니다.
+                if (!sessionStorage.getItem('synced90days')) {
+                    sessionStorage.setItem('synced90days', 'true');
+                    // 약간의 딜레이 후 동기화 자동 시작
+                    setTimeout(() => {
+                        const syncBtn = document.getElementById('refreshBtn');
+                        if (syncBtn) {
+                            syncBtn.click();
+                        }
+                    }, 500);
+                }
             } else {
                 throw new Error(data.error || '주문 정보를 불러오는데 실패했습니다.');
             }
