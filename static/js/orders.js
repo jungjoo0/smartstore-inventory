@@ -57,11 +57,25 @@ async function loadOrders(isSync = false) {
 
     try {
         if (isSync) {
-            // [동기화 로직]
-            // 90일치를 5일 단위로 끊어서 요청 (총 18회)
-            const totalDays = 90;
-            const chunkSize = 5;
-            const iterations = Math.ceil(totalDays / chunkSize);
+            // [강제 캐시 갱신] 최근 3일 또는 일정 기간 데이터 갱신
+            const url = `/api/orders?sync=true&days=3&offset=0`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(`데이터 갱신 중 오류: ${data.error || response.statusText}`);
+            }
+
+            if (lastSynced) {
+                lastSynced.textContent = data.message || '업데이트 완료!';
+                setTimeout(() => { lastSynced.textContent = ''; }, 5000);
+            }
+
+            // 동기화 완료 후 테이블 재렌더링
+            allOrders = data.orders || [];
+            updateStatusFilter(allOrders);
+            filterOrders();
+            return;
 
             for (let i = 0; i < iterations; i++) {
                 const offset = i * chunkSize;
@@ -96,7 +110,7 @@ async function loadOrders(isSync = false) {
             return;
 
         } else {
-            // [일반 조회 로직] 구글시트 또는 DB 조회
+            // [캐시 우선 조회] 서버의 인메모리 캐시에서 가져오기
             const response = await fetch('/api/orders');
             const data = await response.json();
 
@@ -128,7 +142,7 @@ function updateStatusFilter(orders) {
     const currentValue = statusFilter.value;
 
     // 유니크한 상태 값 추출 (null/undefined 제외)
-    // 구글 시트 데이터는 딕셔너리 리스트이므로 status 키 사용
+    // 메모리에 캐싱된 네이버 API 원본 상태값 사용
     const statuses = [...new Set(orders.map(o => o.status))].filter(s => s).sort();
 
     // 옵션 초기화 (전체 상태 포함)
