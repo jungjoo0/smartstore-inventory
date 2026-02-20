@@ -123,9 +123,7 @@ async function loadOrders(isSync = false) {
         console.error(error);
         orderList.innerHTML = `<div class="error">오류가 발생했습니다: ${error.message}</div>`;
     } finally {
-        if (!isSync) {
-            loading.classList.remove('active');
-        }
+        loading.classList.remove('active');
     }
 }
 
