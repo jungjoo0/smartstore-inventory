@@ -24,12 +24,6 @@ function getKoreanStatus(status) {
 document.addEventListener('DOMContentLoaded', () => {
     loadOrders();
 
-    // 동기화 버튼 이벤트
-    const syncBtn = document.getElementById('syncBtn');
-    if (syncBtn) {
-        syncBtn.addEventListener('click', () => loadOrders(true));
-    }
-
     // 필터 이벤트 리스너
     const statusFilter = document.getElementById('statusFilter');
     const searchInput = document.getElementById('searchInput');
@@ -41,12 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadOrders(isSync = false) {
     const loading = document.getElementById('loading');
     const orderList = document.getElementById('orderList');
-    // 버튼 Selector
-    const syncBtn = document.getElementById('syncBtn');
     const lastSynced = document.getElementById('lastSynced');
 
     loading.classList.add('active');
-    if (syncBtn) syncBtn.disabled = true;
 
     if (isSync) {
         orderList.innerHTML = '<div class="no-data" id="syncProgress">네이버와 동기화 중입니다...<br>진행률: 0%</div>';
@@ -57,22 +48,48 @@ async function loadOrders(isSync = false) {
 
     try {
         if (isSync) {
-            // [강제 캐시 갱신] 최근 3일 또는 일정 기간 데이터 갱신
-            const url = `/api/orders?sync=true&days=3&offset=0`;
-            const response = await fetch(url);
-            const data = await response.json();
+            // [강제 캐시 갱신] 최근 90일 데이터를 15일 단위로 끊어서 요청 (API 속도 제한 고려)
+            const totalDays = 90;
+            const chunkSize = 15;
+            const iterations = Math.ceil(totalDays / chunkSize);
+            let accumulatedOrders = [];
 
-            if (!response.ok) {
-                throw new Error(`데이터 갱신 중 오류: ${data.error || response.statusText}`);
+            for (let i = 0; i < iterations; i++) {
+                const offset = i * chunkSize;
+                const progress = Math.round((i / iterations) * 100);
+
+                const progressEl = document.getElementById('syncProgress');
+                if (progressEl) {
+                    progressEl.innerHTML = `네이버와 동기화 중입니다...<br>구간: ${offset}~${Math.min(offset + chunkSize, totalDays)}일 전<br>진행률: ${progress}%`;
+                }
+
+                // API 호출 (구글 시트clear 요소는 뺐고, 단순히 메모리에 덮어씌움)
+                const url = `/api/orders?sync=true&days=${chunkSize}&offset=${offset}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(`동기화 중 오류 (구간 ${offset}): ${data.error || response.statusText}`);
+                }
+
+                // 받아온 데이터 누적
+                if (data.orders) {
+                    accumulatedOrders = accumulatedOrders.concat(data.orders);
+                }
+
+                // API 한도 타격을 줄이기 위한 안전 딜레이
+                if (i < iterations - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                }
             }
 
             if (lastSynced) {
-                lastSynced.textContent = data.message || '업데이트 완료!';
+                lastSynced.textContent = '최근 90일 동기화 완료!';
                 setTimeout(() => { lastSynced.textContent = ''; }, 5000);
             }
 
-            // 동기화 완료 후 테이블 재렌더링
-            allOrders = data.orders || [];
+            // 프론트엔드 전역변수에 누적된 90일치 최신 데이터를 덮어씌우고 다시 그린다.
+            allOrders = accumulatedOrders;
             updateStatusFilter(allOrders);
             filterOrders();
             return;
@@ -128,7 +145,6 @@ async function loadOrders(isSync = false) {
     } finally {
         if (!isSync) {
             loading.classList.remove('active');
-            if (syncBtn) syncBtn.disabled = false;
         }
     }
 }
