@@ -320,8 +320,6 @@ def get_order_list(access_token, days=1, offset=0):
         processed_ids.add(p_id)
         
         status = product_order.get('productOrderStatus')
-        if status == 'PURCHASE_DECIDED':
-            continue
             
         order_detail = item.get('order', {})
         shipping_address = product_order.get('shippingAddress', {})
