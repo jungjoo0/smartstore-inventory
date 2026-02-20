@@ -36,7 +36,8 @@
             </div>
 
             <div class="control-group">
-                <button class="btn btn-sync" id="syncBtn">🔄 동기화 (네이버 → 구글시트)</button>
+                <button class="btn btn-sync" id="refreshBtn" onclick="loadOrders(true)">🔄 새로고침 (최근 90일 주문
+                    가져오기)</button>
                 <div class="last-synced" id="lastSynced"></div>
             </div>
             <div class="loading" id="loading">
