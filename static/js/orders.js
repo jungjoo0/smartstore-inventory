@@ -4,7 +4,7 @@ let allOrders = [];
 // 상태 한글 매핑
 const STATUS_MAP = {
     'PAYMENT_WAITING': '입금대기',
-    'PAYED': '결제완료 (신규주문)',
+    'PAYED': '결제완료',
     'DELIVERING': '배송중',
     'DELIVERED': '배송완료',
     'PURCHASE_DECIDED': '구매확정',
@@ -12,8 +12,8 @@ const STATUS_MAP = {
     'CANCELED': '취소',
     'RETURNED': '반품',
     'CANCELED_BY_NOPAYMENT': '미입금취소',
-    'PRODUCT_PREPARE': '발송대기 (상품준비중)',
-    'DELIVERY_PREPARE': '발송대기 (배송준비중)'
+    'PRODUCT_PREPARE': '발송대기',
+    'DELIVERY_PREPARE': '발송대기'
 };
 
 function getKoreanStatus(status) {
